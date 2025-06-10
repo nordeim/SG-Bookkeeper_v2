@@ -1,0 +1,21 @@
+$ poetry install
+Updating dependencies
+Resolving dependencies... (6.0s)
+
+Package operations: 0 installs, 10 updates, 0 removals
+
+  - Updating shiboken6 (6.9.0 -> 6.9.1)
+  - Updating pyside6-essentials (6.9.0 -> 6.9.1)
+  - Updating typing-extensions (4.13.2 -> 4.14.0)
+  - Updating coverage (7.8.1 -> 7.8.2)
+  - Updating greenlet (3.2.2 -> 3.2.3)
+  - Updating identify (2.6.10 -> 2.6.12)
+  - Updating pyside6-addons (6.9.0 -> 6.9.1)
+  - Updating mypy (1.15.0 -> 1.16.0)
+  - Updating pydantic (2.11.4 -> 2.11.5)
+  - Updating pyside6 (6.9.0 -> 6.9.1)
+
+Writing lock file
+
+Installing the current project: sg-bookkeeper (1.0.0)
+
