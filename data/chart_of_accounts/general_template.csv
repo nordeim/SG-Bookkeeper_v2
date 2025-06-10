@@ -33,6 +33,8 @@ Code,Name,AccountType,SubType,TaxTreatment,GSTApplicable,CashFlowCategory,Parent
 7000,OTHER INCOME,Revenue,,,,,,,,,,
 7100,Interest Income,Revenue,"Other Income",Taxable,FALSE,Investing,7000,INTEREST_INCOME,FALSE,FALSE,,
 7200,Foreign Exchange Gain,Revenue,"Other Income",Taxable,FALSE,Operating,7000,FOREX,FALSE,FALSE,,
+7201,Unrealized Forex Gain (P&L),Revenue,"Other Income",Non-Taxable,FALSE,Operating,7000,FOREX,FALSE,FALSE,,
 8000,OTHER EXPENSES,Expense,,,,,,,,,,
 8100,Bank Charges,Expense,"Other Expenses",Non-Deductible,TRUE,Operating,8000,BANK_CHARGES,FALSE,FALSE,,
 8200,Foreign Exchange Loss,Expense,"Other Expenses",Non-Deductible,FALSE,Operating,8000,FOREX,FALSE,FALSE,,
+8201,Unrealized Forex Loss (P&L),Expense,"Other Expenses",Non-Deductible,FALSE,Operating,8000,FOREX,FALSE,FALSE,,

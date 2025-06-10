@@ -42,8 +42,6 @@ class CompanyManager:
                 json.dump(self._companies, f, indent=2)
         except IOError as e:
             self.app_core.logger.error(f"Failed to save company registry to {self.registry_file}: {e}")
-            # In a real UI app, we'd show an error dialog here.
-            # For now, logging is sufficient.
 
     def get_company_list(self) -> List[Dict[str, str]]:
         """Returns a copy of the company list."""
@@ -54,7 +52,6 @@ class CompanyManager:
         if not all(k in company_info for k in ['display_name', 'database_name']):
             raise ValueError("Company info must contain 'display_name' and 'database_name'.")
         
-        # Check for duplicates based on database_name
         if any(c['database_name'] == company_info['database_name'] for c in self._companies):
             self.app_core.logger.warning(f"Attempted to add duplicate company database '{company_info['database_name']}'. Ignoring.")
             return

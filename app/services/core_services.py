@@ -1,6 +1,7 @@
 # File: app/services/core_services.py
 from typing import List, Optional, Any, TYPE_CHECKING
-from sqlalchemy import select, update
+from sqlalchemy import select, update, text
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.core.sequence import Sequence
 from app.models.core.configuration import Configuration
 from app.models.core.company_setting import CompanySetting
@@ -20,12 +21,18 @@ class SequenceService:
             result = await session.execute(stmt)
             return result.scalars().first()
 
-    async def save_sequence(self, sequence_obj: Sequence) -> Sequence:
-        async with self.db_manager.session() as session:
-            session.add(sequence_obj)
-            await session.flush()
-            await session.refresh(sequence_obj)
+    async def save_sequence(self, sequence_obj: Sequence, session: Optional[AsyncSession] = None) -> Sequence:
+        async def _save(sess: AsyncSession):
+            sess.add(sequence_obj)
+            await sess.flush()
+            await sess.refresh(sequence_obj)
             return sequence_obj
+
+        if session:
+            return await _save(session)
+        else:
+            async with self.db_manager.session() as new_session: # type: ignore
+                return await _save(new_session)
 
 class ConfigurationService:
     def __init__(self, db_manager: "DatabaseManager"):
@@ -58,16 +65,13 @@ class CompanySettingsService:
 
     async def get_company_settings(self, settings_id: int = 1) -> Optional[CompanySetting]:
         async with self.db_manager.session() as session:
-            # Ensure eager loading of related user if needed, though not strictly necessary for just settings values
             return await session.get(CompanySetting, settings_id)
 
     async def save_company_settings(self, settings_obj: CompanySetting) -> CompanySetting:
         if self.app_core and self.app_core.current_user:
-            # Assuming updated_by_user_id is the correct attribute name as per model
             settings_obj.updated_by_user_id = self.app_core.current_user.id # type: ignore
         async with self.db_manager.session() as session:
             session.add(settings_obj)
             await session.flush()
             await session.refresh(settings_obj)
             return settings_obj
-

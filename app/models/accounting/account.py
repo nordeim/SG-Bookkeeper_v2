@@ -1,12 +1,21 @@
 # File: app/models/accounting/account.py
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Text, DateTime, CheckConstraint, Date, Numeric
 from sqlalchemy.orm import relationship, Mapped, mapped_column
-from typing import List, Optional 
+from typing import List, Optional, TYPE_CHECKING
 import datetime
 from decimal import Decimal
 
 from app.models.base import Base, TimestampMixin 
 from app.models.core.user import User 
+
+if TYPE_CHECKING:
+    from app.models.accounting.journal_entry import JournalEntryLine
+    from app.models.accounting.budget import BudgetDetail
+    from app.models.accounting.tax_code import TaxCode
+    from app.models.business.customer import Customer
+    from app.models.business.vendor import Vendor
+    from app.models.business.product import Product
+    from app.models.business.bank_account import BankAccount
 
 class Account(Base, TimestampMixin):
     __tablename__ = 'accounts'
@@ -42,15 +51,15 @@ class Account(Base, TimestampMixin):
     created_by_user: Mapped["User"] = relationship("User", foreign_keys=[created_by_user_id])
     updated_by_user: Mapped["User"] = relationship("User", foreign_keys=[updated_by_user_id])
 
-    journal_lines: Mapped[List["JournalEntryLine"]] = relationship(back_populates="account") # type: ignore
-    budget_details: Mapped[List["BudgetDetail"]] = relationship(back_populates="account") # type: ignore
-    tax_code_applications: Mapped[List["TaxCode"]] = relationship(back_populates="affects_account") # type: ignore
-    customer_receivables_links: Mapped[List["Customer"]] = relationship(back_populates="receivables_account") # type: ignore
-    vendor_payables_links: Mapped[List["Vendor"]] = relationship(back_populates="payables_account") # type: ignore
-    product_sales_links: Mapped[List["Product"]] = relationship(foreign_keys="Product.sales_account_id", back_populates="sales_account") # type: ignore
-    product_purchase_links: Mapped[List["Product"]] = relationship(foreign_keys="Product.purchase_account_id", back_populates="purchase_account") # type: ignore
-    product_inventory_links: Mapped[List["Product"]] = relationship(foreign_keys="Product.inventory_account_id", back_populates="inventory_account") # type: ignore
-    bank_account_links: Mapped[List["BankAccount"]] = relationship(back_populates="gl_account") # type: ignore
+    journal_lines: Mapped[List["JournalEntryLine"]] = relationship(back_populates="account")
+    budget_details: Mapped[List["BudgetDetail"]] = relationship(back_populates="account")
+    tax_code_applications: Mapped[List["TaxCode"]] = relationship(back_populates="affects_account")
+    customer_receivables_links: Mapped[List["Customer"]] = relationship(back_populates="receivables_account")
+    vendor_payables_links: Mapped[List["Vendor"]] = relationship(back_populates="payables_account")
+    product_sales_links: Mapped[List["Product"]] = relationship(foreign_keys="Product.sales_account_id", back_populates="sales_account")
+    product_purchase_links: Mapped[List["Product"]] = relationship(foreign_keys="Product.purchase_account_id", back_populates="purchase_account")
+    product_inventory_links: Mapped[List["Product"]] = relationship(foreign_keys="Product.inventory_account_id", back_populates="inventory_account")
+    bank_account_links: Mapped[List["BankAccount"]] = relationship(back_populates="gl_account")
 
     def to_dict(self):
         return {

@@ -5,7 +5,6 @@
 -- Changes from 1.0.6:
 -- - Added accounts for WHT Payable, Forex Gain/Loss.
 -- - Added configuration for WHT Payable, Forex Gain/Loss.
--- - Added 'CorpTaxRate_Default' to core.configuration for use in tax computation reports.
 -- ============================================================================
 
 BEGIN;
@@ -14,14 +13,10 @@ BEGIN;
 -- Insert default roles
 -- ----------------------------------------------------------------------------
 INSERT INTO core.roles (name, description) VALUES
-('Administrator', 'Full system access'),
-('Accountant', 'Access to accounting functions'),
-('Bookkeeper', 'Basic transaction entry and reporting'),
-('Manager', 'Access to reports and dashboards'),
+('Administrator', 'Full system access'), ('Accountant', 'Access to accounting functions'),
+('Bookkeeper', 'Basic transaction entry and reporting'), ('Manager', 'Access to reports and dashboards'),
 ('Viewer', 'Read-only access to data')
-ON CONFLICT (name) DO UPDATE SET 
-    description = EXCLUDED.description, 
-    updated_at = CURRENT_TIMESTAMP;
+ON CONFLICT (name) DO UPDATE SET description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
 
 -- ----------------------------------------------------------------------------
 -- Insert default permissions
@@ -62,11 +57,7 @@ ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description, module = EX
 -- ----------------------------------------------------------------------------
 INSERT INTO core.users (id, username, password_hash, email, full_name, is_active, require_password_change)
 VALUES (1, 'system_init_user', crypt('system_init_secure_password_!PLACEHOLDER!', gen_salt('bf')), 'system_init@sgbookkeeper.com', 'System Initializer', FALSE, FALSE) 
-ON CONFLICT (id) DO UPDATE SET 
-    username = EXCLUDED.username, password_hash = EXCLUDED.password_hash, email = EXCLUDED.email, 
-    full_name = EXCLUDED.full_name, is_active = EXCLUDED.is_active, require_password_change = EXCLUDED.require_password_change,
-    updated_at = CURRENT_TIMESTAMP;
-
+ON CONFLICT (id) DO UPDATE SET username = EXCLUDED.username, password_hash = EXCLUDED.password_hash, email = EXCLUDED.email, full_name = EXCLUDED.full_name, is_active = EXCLUDED.is_active, require_password_change = EXCLUDED.require_password_change, updated_at = CURRENT_TIMESTAMP;
 SELECT setval(pg_get_serial_sequence('core.users', 'id'), COALESCE((SELECT MAX(id) FROM core.users), 1), true);
 
 -- ----------------------------------------------------------------------------
@@ -119,11 +110,9 @@ INSERT INTO core.configuration (config_key, config_value, description, updated_b
 ('SysAcc_DefaultInventoryAsset', '1130', 'Default Inventory Asset account code', 1),
 ('SysAcc_DefaultCOGS', '5100', 'Default Cost of Goods Sold account code', 1),
 ('SysAcc_GSTControl', 'SYS-GST-CONTROL', 'GST Control/Clearing Account', 1),
-('SysAcc_WHTPayable', '2130', 'Default Withholding Tax Payable account code', 1),
-('SysAcc_ForexGain', '7200', 'Default Foreign Exchange Gain account code', 1),
-('SysAcc_ForexLoss', '8200', 'Default Foreign Exchange Loss account code', 1),
-('SysAcc_UnrealizedForexGain', '7201', 'Default Unrealized Foreign Exchange Gain account code', 1),
-('SysAcc_UnrealizedForexLoss', '8201', 'Default Unrealized Foreign Exchange Loss account code', 1),
+('SysAcc_WHTPayable', '2130', 'Default Withholding Tax Payable account code', 1), -- NEW
+('SysAcc_ForexGain', '7200', 'Default Foreign Exchange Gain account code', 1),    -- NEW
+('SysAcc_ForexLoss', '8200', 'Default Foreign Exchange Loss account code', 1),    -- NEW
 ('CorpTaxRate_Default', '17.00', 'Default Corporate Tax Rate (%)', 1)
 ON CONFLICT (config_key) DO UPDATE SET config_value = EXCLUDED.config_value, description = EXCLUDED.description, updated_by = EXCLUDED.updated_by, updated_at = CURRENT_TIMESTAMP;
 
@@ -158,11 +147,9 @@ INSERT INTO accounting.accounts (code, name, account_type, sub_type, created_by,
 ('SYS-GST-CONTROL', 'System GST Control', 'Liability', 'GST Payable', 1, 1, TRUE, TRUE, FALSE, 'Operating'),
 ('1112', 'Cash on Hand', 'Asset', 'Cash and Cash Equivalents', 1,1, TRUE, FALSE, FALSE, 'Operating'),
 ('1130', 'Inventory Asset Control', 'Asset', 'Inventory', 1,1,TRUE, TRUE, FALSE, 'Operating'),
-('2130', 'Withholding Tax Payable', 'Liability', 'Current Liability', 1, 1, TRUE, FALSE, FALSE, 'Operating'),
-('7200', 'Foreign Exchange Gain', 'Revenue', 'Other Income', 1, 1, TRUE, FALSE, FALSE, 'Operating'),
-('8200', 'Foreign Exchange Loss', 'Expense', 'Other Expenses', 1, 1, TRUE, FALSE, FALSE, 'Operating'),
-('7201', 'Unrealized Forex Gain (P&L)', 'Revenue', 'Other Income', 1, 1, TRUE, FALSE, FALSE, 'Operating'),
-('8201', 'Unrealized Forex Loss (P&L)', 'Expense', 'Other Expenses', 1, 1, TRUE, FALSE, FALSE, 'Operating')
+('2130', 'Withholding Tax Payable', 'Liability', 'Current Liability', 1, 1, TRUE, FALSE, FALSE, 'Operating'), -- NEW
+('7200', 'Foreign Exchange Gain', 'Revenue', 'Other Income', 1, 1, TRUE, FALSE, FALSE, 'Operating'),       -- NEW
+('8200', 'Foreign Exchange Loss', 'Expense', 'Other Expenses', 1, 1, TRUE, FALSE, FALSE, 'Operating')        -- NEW
 ON CONFLICT (code) DO NOTHING;
 
 -- ----------------------------------------------------------------------------
@@ -185,10 +172,6 @@ INSERT INTO accounting.tax_codes (code, description, tax_type, rate, is_default,
 INSERT INTO accounting.tax_codes (code, description, tax_type, rate, is_default, is_active, created_by, updated_by, affects_account_id)
 SELECT 'WHT15', 'WHT - Non-Resident Director Fee', 'Withholding Tax', 15.00, FALSE, TRUE, 1, 1, acc.id FROM accounting.accounts acc WHERE acc.code = '2130'
 ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description, tax_type = EXCLUDED.tax_type, rate = EXCLUDED.rate, updated_by = EXCLUDED.updated_by, affects_account_id = EXCLUDED.affects_account_id, updated_at = CURRENT_TIMESTAMP;
-INSERT INTO accounting.tax_codes (code, description, tax_type, rate, is_default, is_active, created_by, updated_by, affects_account_id) VALUES
-('ND', 'Non-Deductible', 'Income Tax', 0.00, FALSE, TRUE, 1, 1, NULL) ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description, updated_by = EXCLUDED.updated_by, updated_at = CURRENT_TIMESTAMP;
-INSERT INTO accounting.tax_codes (code, description, tax_type, rate, is_default, is_active, created_by, updated_by, affects_account_id) VALUES
-('CA', 'Capital Allowance', 'Income Tax', 0.00, FALSE, TRUE, 1, 1, NULL) ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description, updated_by = EXCLUDED.updated_by, updated_at = CURRENT_TIMESTAMP;
 
 -- ----------------------------------------------------------------------------
 -- Create 'admin' user and assign 'Administrator' role

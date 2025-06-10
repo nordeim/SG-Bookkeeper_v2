@@ -39,5 +39,3 @@ class WithholdingTaxCertificate(Base, TimestampMixin):
     journal_entry: Mapped[Optional["JournalEntry"]] = relationship()
     created_by_user: Mapped["User"] = relationship("User", foreign_keys=[created_by_user_id])
     updated_by_user: Mapped["User"] = relationship("User", foreign_keys=[updated_by_user_id])
-
-Vendor.wht_certificates = relationship("WithholdingTaxCertificate", back_populates="vendor") # type: ignore

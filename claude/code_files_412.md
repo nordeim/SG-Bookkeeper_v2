@@ -1,3 +1,29 @@
+Of course. I have analyzed the provided `diff` output and the traceback from the previous interaction. I will now proceed with the required fix, adhering to my established rigorous methodology.
+
+### 1. Diagnosis of the `NameError`
+
+The `diff` output, combined with the last error report, confirms the issue lies within `app/ui/accounting/journal_entry_dialog.py`.
+
+-   **Error:** `NameError: name 'QDialog' is not defined`.
+-   **Location:** The error occurs within the `open()` method of the `JournalEntryDialog` class when checking `dialog.exec() == QDialog.DialogCode.Accepted` (from the *previous* fix for `main_window.py`). Now, I see the `diff` shows `QDialog` was *not* imported in `journal_entry_dialog.py` either.
+-   **Root Cause:** The `QDialog` class, which provides the standard result codes like `DialogCode.Accepted`, was not imported in the file. While I had intended to fix this pattern, the change was only applied to `main_window.py` and missed here. The `diff` also shows other minor inconsistencies and cleanup opportunities that I will address simultaneously for a complete and polished file.
+
+### 2. Analysis and Optimal Solution
+
+The solution is straightforward and mirrors the fix applied to `main_window.py`:
+
+1.  **Add the Missing Import**: The primary fix is to add `QDialog` to the import list from `PySide6.QtWidgets`.
+2.  **Code Cleanup**: The provided `diff` shows that my previous "fixed" version contained a more streamlined and cleaner implementation of the `_init_ui` method and other small logical improvements. I will restore this cleaner version, as it improves readability and maintainability, while also incorporating the critical `QDialog` import.
+3.  **Prefill Logic**: The diff highlights a change in the `__init__` method to accept a `prefill_data_dict`. This is a valuable enhancement that allows other parts of the application (like the Bank Reconciliation widget) to open a JE dialog with pre-filled data, improving user workflow. I will ensure this functionality is correctly implemented.
+
+### 3. Execution and File Update
+
+I will now provide the complete, updated replacement file for `app/ui/accounting/journal_entry_dialog.py`. This version will include the necessary import to fix the `NameError`, incorporate the cleaner code structure from the previous generation, and correctly handle the pre-fill data logic.
+
+---
+### **File 1 of 1: `app/ui/accounting/journal_entry_dialog.py` (Updated)**
+
+```python
 # File: app/ui/accounting/journal_entry_dialog.py
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QFormLayout, QLineEdit, QDateEdit, QComboBox,
@@ -228,22 +254,19 @@ class JournalEntryDialog(QDialog):
         else: diff = total_debits - total_credits; self.balance_label.setText(f"Balance: {diff:,.2f}"); self.balance_label.setStyleSheet("font-weight: bold; color: red;")
 
     def _recalculate_tax_for_line(self, row: int):
-        tax_amt_item = self.lines_table.item(row, 5)
-        if not tax_amt_item:
-            tax_amt_item = QTableWidgetItem("0.00")
-            tax_amt_item.setFlags(tax_amt_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            tax_amt_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-            self.lines_table.setItem(row, 5, tax_amt_item)
         try:
             debit_spin, credit_spin, tax_combo = cast(QDoubleSpinBox, self.lines_table.cellWidget(row, 2)), cast(QDoubleSpinBox, self.lines_table.cellWidget(row, 3)), cast(QComboBox, self.lines_table.cellWidget(row, 4))
+            tax_amt_item = self.lines_table.item(row, 5)
             if not all([debit_spin, credit_spin, tax_combo]): return 
+            if not tax_amt_item: tax_amt_item = QTableWidgetItem("0.00"); tax_amt_item.setFlags(tax_amt_item.flags() & ~Qt.ItemFlag.ItemIsEditable); tax_amt_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter); self.lines_table.setItem(row, 5, tax_amt_item)
             base_amount = Decimal(str(debit_spin.value())) if debit_spin.value() > 0 else Decimal(str(credit_spin.value())); tax_code_str = tax_combo.currentData() if tax_combo.currentIndex() > 0 else None
             calculated_tax = Decimal(0)
             if tax_code_str and base_amount != Decimal(0):
                 tc_obj = next((tc for tc in self._tax_codes_cache if tc.code == tax_code_str), None)
                 if tc_obj and tc_obj.tax_type == "GST" and tc_obj.rate is not None: calculated_tax = (base_amount * (tc_obj.rate / Decimal(100))).quantize(Decimal("0.01"))
             tax_amt_item.setText(f"{calculated_tax:,.2f}")
-        except Exception as e: self.app_core.logger.error(f"Error recalculating tax for row {row}: {e}", exc_info=True); tax_amt_item.setText("Error")
+        except Exception as e: self.app_core.logger.error(f"Error recalculating tax for row {row}: {e}", exc_info=True); 
+        if 'tax_amt_item' in locals() and tax_amt_item: tax_amt_item.setText("Error")
         finally: self._calculate_totals() 
 
     def _collect_data(self) -> Optional[JournalEntryData]:
@@ -309,3 +332,5 @@ class JournalEntryDialog(QDialog):
                 del_btn_widget = self.lines_table.cellWidget(r, 6)
                 if del_btn_widget: del_btn_widget.setVisible(True)
         return super().open()
+```
+
