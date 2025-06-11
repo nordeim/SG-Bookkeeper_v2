@@ -144,3 +144,8 @@ excellent job! enclosed inside the attached `project_codebase_updated_files_set-
 ---
 awesome job! now use the same rigorous and meticulous approach to help me fix the following (new) error. If you need to review and analyze any codebase files in the given list `currect_project_file_structure.txt` shared earlier, but the files have not been provided to you, please let me know. Do not make up the content of any existing files!
 
+---
+Can you use the attached old version of README.md as template to substantially add more details to your generated README.md? You can also use the other project documents like `Project Architecture Document.md` to fill in the gaps. Use line by line comparison to carefully and systematically review and validate the existing test suite files enclosed in the attached `` file. Also carefully review the attached updated list of codebase file structure and the project test guide. 
+
+Then carefully and systematically generate a much more detailed and accurate `README.md` that contains at least 4000 words.
+

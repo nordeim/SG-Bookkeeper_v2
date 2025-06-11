@@ -4264,6 +4264,176 @@ async def test_get_fy_by_date_overlap_exclude_id(
 
 ```
 
+# tests/unit/core/test_security_manager.py
+```py
+# File: tests/unit/core/test_security_manager.py
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
+import datetime
+
+from app.core.security_manager import SecurityManager
+from app.core.database_manager import DatabaseManager
+from app.models.core.user import User, Role, Permission
+from app.utils.result import Result
+from app.utils.pydantic_models import UserCreateData, UserUpdateData, RoleCreateData
+
+pytestmark = pytest.mark.asyncio
+
+@pytest.fixture
+def mock_session() -> AsyncMock:
+    """Fixture to create a mock AsyncSession."""
+    session = AsyncMock()
+    session.get = AsyncMock()
+    session.execute = AsyncMock()
+    session.add = MagicMock()
+    session.delete = MagicMock()
+    session.flush = AsyncMock()
+    session.refresh = AsyncMock()
+    return session
+
+@pytest.fixture
+def mock_db_manager(mock_session: AsyncMock) -> MagicMock:
+    """Fixture to create a mock DatabaseManager."""
+    db_manager = MagicMock(spec=DatabaseManager)
+    db_manager.session.return_value.__aenter__.return_value = mock_session
+    db_manager.session.return_value.__aexit__.return_value = None
+    return db_manager
+
+@pytest.fixture
+def security_manager(mock_db_manager: MagicMock) -> SecurityManager:
+    """Fixture to create a SecurityManager instance."""
+    return SecurityManager(db_manager=mock_db_manager)
+
+@pytest.fixture
+def sample_user_orm() -> User:
+    """Provides a sample User ORM object."""
+    user = User(
+        id=1,
+        username="testuser",
+        password_hash="$2b$12$EXAMPLEHASHSTRINGHERE............", # Example hash
+        is_active=True,
+        roles=[]
+    )
+    return user
+
+@pytest.fixture
+def sample_admin_role() -> Role:
+    return Role(id=1, name="Administrator", permissions=[])
+
+@pytest.fixture
+def sample_viewer_role() -> Role:
+    view_perm = Permission(id=1, code="ACCOUNT_VIEW", module="Accounting")
+    return Role(id=2, name="Viewer", permissions=[view_perm])
+
+
+def test_hash_and_verify_password(security_manager: SecurityManager):
+    """Test that password hashing and verification work correctly."""
+    password = "MyStrongPassword123"
+    hashed_password = security_manager.hash_password(password)
+    
+    assert hashed_password != password
+    assert isinstance(hashed_password, str)
+    assert security_manager.verify_password(password, hashed_password) is True
+    assert security_manager.verify_password("WrongPassword", hashed_password) is False
+
+async def test_authenticate_user_success(security_manager: SecurityManager, mock_session: AsyncMock, sample_user_orm: User):
+    """Test successful user authentication."""
+    password = "password"
+    sample_user_orm.password_hash = security_manager.hash_password(password)
+    sample_user_orm.is_active = True
+    
+    mock_session.execute.return_value.scalars.return_value.first.return_value = sample_user_orm
+    
+    authenticated_user = await security_manager.authenticate_user("testuser", password)
+    
+    assert authenticated_user is not None
+    assert authenticated_user.id == 1
+    assert security_manager.current_user == authenticated_user
+    mock_session.commit.assert_awaited_once()
+
+async def test_authenticate_user_wrong_password(security_manager: SecurityManager, mock_session: AsyncMock, sample_user_orm: User):
+    """Test authentication failure due to wrong password."""
+    password = "password"
+    sample_user_orm.password_hash = security_manager.hash_password(password)
+    sample_user_orm.is_active = True
+    sample_user_orm.failed_login_attempts = 0
+    
+    mock_session.execute.return_value.scalars.return_value.first.return_value = sample_user_orm
+
+    authenticated_user = await security_manager.authenticate_user("testuser", "wrongpassword")
+    
+    assert authenticated_user is None
+    assert security_manager.current_user is None
+    assert sample_user_orm.failed_login_attempts == 1
+    mock_session.commit.assert_awaited_once()
+
+async def test_authenticate_user_inactive(security_manager: SecurityManager, mock_session: AsyncMock, sample_user_orm: User):
+    """Test authentication failure for an inactive user."""
+    sample_user_orm.is_active = False
+    mock_session.execute.return_value.scalars.return_value.first.return_value = sample_user_orm
+
+    authenticated_user = await security_manager.authenticate_user("testuser", "password")
+    
+    assert authenticated_user is None
+    mock_session.commit.assert_awaited_once() # Still commits attempt info
+
+async def test_create_user_with_roles_success(security_manager: SecurityManager, mock_session: AsyncMock, sample_viewer_role: Role):
+    """Test successfully creating a user with roles assigned."""
+    dto = UserCreateData(
+        username="newuser",
+        password="ValidPassword1",
+        confirm_password="ValidPassword1",
+        full_name="New User",
+        email="new@user.com",
+        is_active=True,
+        assigned_role_ids=[sample_viewer_role.id],
+        user_id=99 # Admin user performing action
+    )
+    
+    # Mock checks: no existing user, role exists
+    mock_execute_result = AsyncMock()
+    mock_execute_result.scalars.return_value.first.return_value = None # No existing user
+    mock_execute_result.scalars.return_value.all.return_value = [sample_viewer_role] # Role lookup finds it
+    mock_session.execute.return_value = mock_execute_result
+
+    # Mock refresh to simulate DB setting ID
+    async def mock_refresh(obj, attribute_names=None): obj.id = 10
+    mock_session.refresh.side_effect = mock_refresh
+    
+    result = await security_manager.create_user_with_roles(dto)
+    
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.id == 10
+    assert result.value.username == "newuser"
+    assert len(result.value.roles) == 1
+    assert result.value.roles[0].name == "Viewer"
+    mock_session.add.assert_called_once()
+    mock_session.flush.assert_awaited_once()
+    
+async def test_has_permission_as_admin(security_manager: SecurityManager, sample_user_orm: User, sample_admin_role: Role):
+    """Test that a user with the Administrator role has all permissions."""
+    sample_user_orm.roles = [sample_admin_role]
+    security_manager.current_user = sample_user_orm
+    
+    assert security_manager.has_permission("ANY_PERMISSION_CODE") is True
+
+async def test_has_permission_specific_role(security_manager: SecurityManager, sample_user_orm: User, sample_viewer_role: Role):
+    """Test permission check for a user with specific, non-admin roles."""
+    sample_user_orm.roles = [sample_viewer_role]
+    security_manager.current_user = sample_user_orm
+    
+    assert security_manager.has_permission("ACCOUNT_VIEW") is True
+    assert security_manager.has_permission("ACCOUNT_CREATE") is False # Viewer role doesn't have this
+    assert security_manager.has_permission("NON_EXISTENT_PERM") is False
+
+async def test_has_permission_no_user(security_manager: SecurityManager):
+    """Test that has_permission returns False when no user is logged in."""
+    security_manager.current_user = None
+    assert security_manager.has_permission("ANY_PERMISSION") is False
+
+```
+
 # tests/unit/reporting/test_dashboard_manager.py
 ```py
 # File: tests/unit/reporting/test_dashboard_manager.py
@@ -4844,8 +5014,343 @@ async def test_generate_general_ledger(fs_generator: FinancialStatementGenerator
 
 ```
 
+# tests/unit/business_logic/test_customer_manager.py
+```py
+# File: tests/unit/business_logic/test_customer_manager.py
+import pytest
+from unittest.mock import AsyncMock, MagicMock
+from decimal import Decimal
+from datetime import date
+
+from app.business_logic.customer_manager import CustomerManager
+from app.services.business_services import CustomerService
+from app.services.account_service import AccountService
+from app.services.accounting_services import CurrencyService
+from app.core.application_core import ApplicationCore
+from app.utils.pydantic_models import CustomerCreateData, CustomerUpdateData
+from app.utils.result import Result
+from app.models.business.customer import Customer
+from app.models.accounting.account import Account
+from app.models.accounting.currency import Currency as CurrencyModel
+import logging
+
+pytestmark = pytest.mark.asyncio
+
+@pytest.fixture
+def mock_customer_service() -> AsyncMock: return AsyncMock(spec=CustomerService)
+
+@pytest.fixture
+def mock_account_service() -> AsyncMock: return AsyncMock(spec=AccountService)
+
+@pytest.fixture
+def mock_currency_service() -> AsyncMock: return AsyncMock(spec=CurrencyService)
+
+@pytest.fixture
+def mock_app_core() -> MagicMock:
+    app_core = MagicMock(spec=ApplicationCore)
+    app_core.logger = MagicMock(spec=logging.Logger)
+    return app_core
+
+@pytest.fixture
+def customer_manager(
+    mock_customer_service: AsyncMock,
+    mock_account_service: AsyncMock,
+    mock_currency_service: AsyncMock,
+    mock_app_core: MagicMock
+) -> CustomerManager:
+    return CustomerManager(
+        customer_service=mock_customer_service,
+        account_service=mock_account_service,
+        currency_service=mock_currency_service,
+        app_core=mock_app_core
+    )
+
+@pytest.fixture
+def valid_customer_create_dto() -> CustomerCreateData:
+    return CustomerCreateData(
+        customer_code="CUST-01", name="Test Customer",
+        currency_code="SGD", user_id=1, receivables_account_id=101
+    )
+
+@pytest.fixture
+def sample_ar_account() -> Account:
+    return Account(id=101, code="1120", name="A/R", account_type="Asset", is_active=True, created_by_user_id=1, updated_by_user_id=1)
+
+@pytest.fixture
+def sample_currency() -> CurrencyModel:
+    return CurrencyModel(code="SGD", name="Singapore Dollar", symbol="$", is_active=True)
+
+# --- Test Cases ---
+
+async def test_create_customer_success(
+    customer_manager: CustomerManager,
+    mock_customer_service: AsyncMock,
+    mock_account_service: AsyncMock,
+    mock_currency_service: AsyncMock,
+    valid_customer_create_dto: CustomerCreateData,
+    sample_ar_account: Account,
+    sample_currency: CurrencyModel
+):
+    # Setup mocks for validation pass
+    mock_customer_service.get_by_code.return_value = None
+    mock_account_service.get_by_id.return_value = sample_ar_account
+    mock_currency_service.get_by_id.return_value = sample_currency
+    # Mock the final save call
+    async def mock_save(customer_orm):
+        customer_orm.id = 1 # Simulate DB assigning an ID
+        return customer_orm
+    mock_customer_service.save.side_effect = mock_save
+
+    result = await customer_manager.create_customer(valid_customer_create_dto)
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.id == 1
+    assert result.value.customer_code == "CUST-01"
+    mock_customer_service.save.assert_awaited_once()
+
+async def test_create_customer_duplicate_code(
+    customer_manager: CustomerManager,
+    mock_customer_service: AsyncMock,
+    valid_customer_create_dto: CustomerCreateData
+):
+    # Simulate that a customer with this code already exists
+    mock_customer_service.get_by_code.return_value = Customer(id=99, customer_code="CUST-01", name="Existing", created_by_user_id=1, updated_by_user_id=1)
+
+    result = await customer_manager.create_customer(valid_customer_create_dto)
+
+    assert not result.is_success
+    assert "already exists" in result.errors[0]
+    mock_customer_service.save.assert_not_called()
+
+async def test_create_customer_inactive_ar_account(
+    customer_manager: CustomerManager,
+    mock_customer_service: AsyncMock,
+    mock_account_service: AsyncMock,
+    mock_currency_service: AsyncMock,
+    valid_customer_create_dto: CustomerCreateData,
+    sample_ar_account: Account,
+    sample_currency: CurrencyModel
+):
+    sample_ar_account.is_active = False # Make the account inactive
+    mock_customer_service.get_by_code.return_value = None
+    mock_account_service.get_by_id.return_value = sample_ar_account
+    mock_currency_service.get_by_id.return_value = sample_currency
+
+    result = await customer_manager.create_customer(valid_customer_create_dto)
+
+    assert not result.is_success
+    assert "is not active" in result.errors[0]
+
+async def test_update_customer_success(customer_manager: CustomerManager, mock_customer_service: AsyncMock):
+    update_dto = CustomerUpdateData(
+        id=1, customer_code="C-001", name="Updated Name", currency_code="SGD", user_id=1
+    )
+    existing_customer = Customer(id=1, customer_code="C-001", name="Original Name", created_by_user_id=1, updated_by_user_id=1)
+    
+    # Mock validation dependencies
+    customer_manager._validate_customer_data = AsyncMock(return_value=[])
+    # Mock service layer get and save
+    mock_customer_service.get_by_id.return_value = existing_customer
+    mock_customer_service.save.side_effect = lambda orm: orm # Return the modified object
+
+    result = await customer_manager.update_customer(1, update_dto)
+    
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.name == "Updated Name"
+    assert result.value.updated_by_user_id == 1
+    mock_customer_service.save.assert_awaited_once_with(existing_customer)
+
+async def test_toggle_customer_status(customer_manager: CustomerManager, mock_customer_service: AsyncMock):
+    existing_customer = Customer(id=1, name="Toggle Test", is_active=True, created_by_user_id=1, updated_by_user_id=1)
+    mock_customer_service.get_by_id.return_value = existing_customer
+    mock_customer_service.save.side_effect = lambda orm: orm
+    
+    # Deactivate
+    result_deactivate = await customer_manager.toggle_customer_active_status(1, user_id=2)
+    assert result_deactivate.is_success
+    assert result_deactivate.value.is_active is False
+    assert result_deactivate.value.updated_by_user_id == 2
+    
+    # Activate again
+    result_activate = await customer_manager.toggle_customer_active_status(1, user_id=3)
+    assert result_activate.is_success
+    assert result_activate.value.is_active is True
+    assert result_activate.value.updated_by_user_id == 3
+
+```
+
 # tests/unit/test_example_unit.py
 ```py
+
+```
+
+# tests/unit/accounting/test_journal_entry_manager.py
+```py
+# File: tests/unit/accounting/test_journal_entry_manager.py
+import pytest
+from unittest.mock import AsyncMock, MagicMock
+from decimal import Decimal
+from datetime import date
+
+from app.accounting.journal_entry_manager import JournalEntryManager
+from app.services.journal_service import JournalService
+from app.services.account_service import AccountService
+from app.services.fiscal_period_service import FiscalPeriodService
+from app.core.application_core import ApplicationCore
+from app.utils.pydantic_models import JournalEntryData, JournalEntryLineData
+from app.utils.result import Result
+from app.models.accounting.journal_entry import JournalEntry
+from app.models.accounting.fiscal_period import FiscalPeriod
+from app.models.accounting.account import Account
+import logging
+
+pytestmark = pytest.mark.asyncio
+
+@pytest.fixture
+def mock_journal_service() -> AsyncMock: return AsyncMock(spec=JournalService)
+
+@pytest.fixture
+def mock_account_service() -> AsyncMock: return AsyncMock(spec=AccountService)
+
+@pytest.fixture
+def mock_fiscal_period_service() -> AsyncMock: return AsyncMock(spec=FiscalPeriodService)
+
+@pytest.fixture
+def mock_app_core() -> MagicMock:
+    app_core = MagicMock(spec=ApplicationCore)
+    app_core.logger = MagicMock(spec=logging.Logger)
+    app_core.db_manager = MagicMock()
+    app_core.db_manager.execute_scalar = AsyncMock()
+    return app_core
+
+@pytest.fixture
+def journal_entry_manager(
+    mock_journal_service: AsyncMock,
+    mock_account_service: AsyncMock,
+    mock_fiscal_period_service: AsyncMock,
+    mock_app_core: MagicMock
+) -> JournalEntryManager:
+    return JournalEntryManager(
+        journal_service=mock_journal_service,
+        account_service=mock_account_service,
+        fiscal_period_service=mock_fiscal_period_service,
+        app_core=mock_app_core
+    )
+
+@pytest.fixture
+def valid_je_create_dto() -> JournalEntryData:
+    return JournalEntryData(
+        journal_type="General",
+        entry_date=date(2023, 1, 20),
+        description="Test Entry",
+        user_id=1,
+        lines=[
+            JournalEntryLineData(account_id=101, debit_amount=Decimal("150.00")),
+            JournalEntryLineData(account_id=201, credit_amount=Decimal("150.00")),
+        ]
+    )
+
+@pytest.fixture
+def sample_posted_je() -> JournalEntry:
+    je = JournalEntry(
+        id=5, entry_no="JE-POSTED-01", entry_date=date(2023,1,10), is_posted=True, created_by_user_id=1, updated_by_user_id=1, fiscal_period_id=1
+    )
+    je.lines = [
+        JournalEntryLine(id=10, account_id=101, debit_amount=Decimal(100)),
+        JournalEntryLine(id=11, account_id=201, credit_amount=Decimal(100))
+    ]
+    return je
+
+# --- Test Cases ---
+
+async def test_create_journal_entry_success(
+    journal_entry_manager: JournalEntryManager,
+    mock_fiscal_period_service: AsyncMock,
+    mock_account_service: AsyncMock,
+    mock_app_core: MagicMock,
+    valid_je_create_dto: JournalEntryData
+):
+    # Setup mocks for validation pass
+    mock_fiscal_period_service.get_by_date.return_value = FiscalPeriod(id=1, name="Jan 2023", start_date=date(2023,1,1), end_date=date(2023,1,31), period_type="Month", status="Open", period_number=1, created_by_user_id=1, updated_by_user_id=1)
+    mock_account_service.get_by_id.side_effect = lambda id: Account(id=id, is_active=True, code=str(id), name=f"Acc {id}", account_type="Asset", created_by_user_id=1, updated_by_user_id=1)
+    mock_app_core.db_manager.execute_scalar.return_value = "JE00001"
+    
+    # Mock the final save call
+    async def mock_save(je_orm):
+        je_orm.id = 1 # Simulate DB assigning an ID
+        return je_orm
+    # The manager doesn't call service.save, it works with the session directly
+    # So we need to mock the session on the db_manager used inside create_journal_entry
+    mock_session = AsyncMock()
+    mock_session.add = MagicMock()
+    mock_session.flush = AsyncMock()
+    mock_session.refresh = AsyncMock()
+    journal_entry_manager.app_core.db_manager.session.return_value.__aenter__.return_value = mock_session
+
+    result = await journal_entry_manager.create_journal_entry(valid_je_create_dto)
+
+    assert result.is_success
+    assert result.value is not None
+    assert result.value.entry_no == "JE00001"
+    mock_session.add.assert_called_once()
+    mock_session.flush.assert_awaited_once()
+
+async def test_create_journal_entry_no_open_period(journal_entry_manager: JournalEntryManager, mock_fiscal_period_service: AsyncMock, valid_je_create_dto: JournalEntryData):
+    mock_fiscal_period_service.get_by_date.return_value = None
+    mock_session = AsyncMock()
+    journal_entry_manager.app_core.db_manager.session.return_value.__aenter__.return_value = mock_session
+
+    result = await journal_entry_manager.create_journal_entry(valid_je_create_dto)
+
+    assert not result.is_success
+    assert "No open fiscal period" in result.errors[0]
+
+async def test_post_journal_entry_success(journal_entry_manager: JournalEntryManager, mock_session: AsyncMock, sample_posted_je: JournalEntry):
+    sample_posted_je.is_posted = False # Start as draft for the test
+    mock_session.get.side_effect = [
+        sample_posted_je, # First get for the JE itself
+        FiscalPeriod(id=1, status="Open") # Second get for the fiscal period
+    ]
+
+    result = await journal_entry_manager.post_journal_entry(5, user_id=1, session=mock_session)
+    
+    assert result.is_success
+    assert result.value.is_posted is True
+    assert result.value.updated_by_user_id == 1
+    mock_session.add.assert_called_once_with(sample_posted_je)
+    
+async def test_reverse_journal_entry_success(journal_entry_manager: JournalEntryManager, mock_session: AsyncMock, sample_posted_je: JournalEntry):
+    # Setup
+    mock_session.get.return_value = sample_posted_je
+    mock_fiscal_period_service = journal_entry_manager.fiscal_period_service
+    mock_fiscal_period_service.get_by_date.return_value = FiscalPeriod(id=2, status="Open") # Mock for reversal date's period
+    journal_entry_manager.app_core.db_manager.execute_scalar.return_value = "JE-REV-01" # Mock sequence for reversal JE
+
+    # Mock the create_journal_entry call within the reversal method
+    reversal_je_mock = MagicMock(spec=JournalEntry, id=6)
+    journal_entry_manager.create_journal_entry = AsyncMock(return_value=Result.success(reversal_je_mock))
+
+    reversal_date = date(2023, 2, 1)
+    reversal_desc = "Reversal"
+    user_id = 2
+
+    # Execute
+    result = await journal_entry_manager.reverse_journal_entry(sample_posted_je.id, reversal_date, reversal_desc, user_id)
+    
+    # Assert
+    assert result.is_success
+    assert result.value == reversal_je_mock
+    # Check that original entry was modified
+    assert sample_posted_je.is_reversed is True
+    assert sample_posted_je.reversing_entry_id == 6
+    assert sample_posted_je.updated_by_user_id == 2
+    # Check that the create call was correct
+    create_call_args = journal_entry_manager.create_journal_entry.call_args.args[0]
+    assert isinstance(create_call_args, JournalEntryData)
+    assert create_call_args.lines[0].credit_amount == sample_posted_je.lines[0].debit_amount
+    assert create_call_args.lines[1].debit_amount == sample_posted_je.lines[1].credit_amount
 
 ```
 
