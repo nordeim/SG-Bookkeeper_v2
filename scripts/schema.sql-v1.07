@@ -1,10 +1,9 @@
 -- File: scripts/schema.sql
 -- ============================================================================
--- SG Bookkeeper - Complete Database Schema - Version 1.0.8
+-- SG Bookkeeper - Complete Database Schema - Version 1.0.7
 -- ============================================================================
--- Changes from 1.0.7:
---  - Added `accounting.withholding_tax_certificates` table to store generated WHT certificates.
---  - Added Foreign Key from `wht_certificates` to `business.payments`.
+-- Changes from 1.0.6:
+--  - Added `cash_flow_category` to `accounting.accounts` table to support the Cash Flow Statement report.
 -- ============================================================================
 
 -- ============================================================================
@@ -381,15 +380,16 @@ CREATE TABLE accounting.gst_returns (
 CREATE TABLE accounting.withholding_tax_certificates (
     id SERIAL PRIMARY KEY,
     certificate_no VARCHAR(20) NOT NULL UNIQUE,
-    vendor_id INTEGER NOT NULL,
-    payment_id INTEGER NOT NULL UNIQUE,
+    vendor_id INTEGER NOT NULL, 
+    tax_type VARCHAR(50) NOT NULL, 
     tax_rate NUMERIC(5,2) NOT NULL,
-    gross_payment_amount NUMERIC(15,2) NOT NULL,
-    tax_amount NUMERIC(15,2) NOT NULL,
     payment_date DATE NOT NULL,
-    nature_of_payment VARCHAR(200) NOT NULL,
+    amount_before_tax NUMERIC(15,2) NOT NULL,
+    tax_amount NUMERIC(15,2) NOT NULL,
+    payment_reference VARCHAR(50),
     status VARCHAR(20) DEFAULT 'Draft' CHECK (status IN ('Draft', 'Issued', 'Voided')),
     issue_date DATE,
+    journal_entry_id INTEGER, 
     notes TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -595,7 +595,7 @@ ALTER TABLE accounting.gst_returns ADD CONSTRAINT fk_gstr_created_by FOREIGN KEY
 ALTER TABLE accounting.gst_returns ADD CONSTRAINT fk_gstr_updated_by FOREIGN KEY (updated_by) REFERENCES core.users(id);
 
 ALTER TABLE accounting.withholding_tax_certificates ADD CONSTRAINT fk_whtc_vendor FOREIGN KEY (vendor_id) REFERENCES business.vendors(id);
-ALTER TABLE accounting.withholding_tax_certificates ADD CONSTRAINT fk_whtc_payment FOREIGN KEY (payment_id) REFERENCES business.payments(id) ON DELETE CASCADE;
+ALTER TABLE accounting.withholding_tax_certificates ADD CONSTRAINT fk_whtc_journal_entry FOREIGN KEY (journal_entry_id) REFERENCES accounting.journal_entries(id);
 ALTER TABLE accounting.withholding_tax_certificates ADD CONSTRAINT fk_whtc_created_by FOREIGN KEY (created_by) REFERENCES core.users(id);
 ALTER TABLE accounting.withholding_tax_certificates ADD CONSTRAINT fk_whtc_updated_by FOREIGN KEY (updated_by) REFERENCES core.users(id);
 

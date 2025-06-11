@@ -1,9 +1,11 @@
 -- File: scripts/initial_data.sql
 -- ============================================================================
--- INITIAL DATA (Version 1.0.8)
+-- INITIAL DATA (Version 1.0.7)
 -- ============================================================================
--- Changes from 1.0.7:
--- - Added sequence for `wht_certificate`.
+-- Changes from 1.0.6:
+-- - Added accounts for WHT Payable, Forex Gain/Loss.
+-- - Added configuration for WHT Payable, Forex Gain/Loss.
+-- - Added 'CorpTaxRate_Default' to core.configuration for use in tax computation reports.
 -- ============================================================================
 
 BEGIN;
@@ -231,4 +233,4 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA accounting GRANT USAGE, SEL
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA business GRANT USAGE, SELECT ON SEQUENCES TO sgbookkeeper_user;
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA audit GRANT USAGE, SELECT ON SEQUENCES TO sgbookkeeper_user;
 
-COMMIT;
+COMMIT; 

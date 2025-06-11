@@ -1,3 +1,24 @@
+You are absolutely correct. My apologies again for the incomplete file generation. My previous response included a comment indicating that the original methods were preserved, but I failed to include the actual code in the final output block. This is a critical error in my process which I must rectify.
+
+I will now provide the **truly complete and correct** replacement file for `app/ui/reports/reports_widget.py`. I have performed the line-by-line validation myself against the original file to ensure that all existing methods and functionality are preserved, and only the new WHT Reporting tab is added.
+
+### **CodeNavigator Analysis Report: `app/ui/reports/reports_widget.py`**
+
+*   **File:** `app/ui/reports/reports_widget.py`
+*   **Analysis of `diff`:** The provided `diff` output correctly shows the *intended* changes:
+    1.  Addition of `from .wht_reporting_widget import WHTReportingWidget`.
+    2.  Addition of the `_create_wht_reporting_tab` method.
+    3.  A call to `_create_wht_reporting_tab()` in the `__init__` method.
+*   **Error Identification:** The `diff` also reveals the critical mistake in my previous output: the vast majority of the original file's methods (like `_on_prepare_gst_f5_clicked`, `_create_financial_statements_tab`, etc.) were omitted. This would result in a non-functional widget.
+*   **Corrective Action:** I will now generate the file correctly, ensuring all original methods are present and only the new code for the WHT tab is added.
+
+***
+
+### **Complete Updated File: `app/ui/reports/reports_widget.py`**
+
+This version now correctly includes all original functionality for the Financial Statements and GST F5 tabs, while adding the new, self-contained Withholding Tax tab.
+
+```python
 # File: app/ui/reports/reports_widget.py
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QDateEdit, QPushButton, QFormLayout, 
@@ -561,3 +582,8 @@ class ReportsWidget(QWidget):
                 QMessageBox.information(self, "Export Successful", f"Report exported to:\n{file_path}")
             else: QMessageBox.warning(self, "Export Failed", f"Failed to generate report bytes for {format_type.upper()}.")
         except Exception as e: self.app_core.logger.error(f"Exception handling report export result: {e}", exc_info=True); QMessageBox.critical(self, "Export Error", f"An error occurred during export: {str(e)}")
+```
+
+---
+https://drive.google.com/file/d/11X3f2mKRWl56NubmyAKo5dwck7p2JaLs/view?usp=sharing, https://drive.google.com/file/d/127qgzFTDe-WAnzFzOzBn2efixfG9w9YE/view?usp=sharing, https://drive.google.com/file/d/131RjCRl_kHc0XtnhCzDmf5bjgJX5iEww/view?usp=sharing, https://drive.google.com/file/d/13B_HcJmxgi3QGYHnj64s275QZN20pg3g/view?usp=sharing, https://drive.google.com/file/d/19n5zeGWlBAwCRFAXfbe4kY5xBK-uV-d7/view?usp=sharing, https://drive.google.com/file/d/1KHIzrVj6ijdFoVTVLa-lfyyVzwf5IYwp/view?usp=sharing, https://drive.google.com/file/d/1M5ybbmzIqj7IUo99Yle7xl_pkczow6Ci/view?usp=sharing, https://drive.google.com/file/d/1OSDUBHWuHA7wKnttqPtYbAEpqdXDi1_8/view?usp=sharing, https://drive.google.com/file/d/1P4rxLCG8-5cJ2_vt2qKJqO2wxN26ro9T/view?usp=sharing, https://aistudio.google.com/app/prompts?state=%7B%22ids%22:%5B%221Rh0wsFMlVjsOSccPUo5JJmfB6gof_tS2%22%5D,%22action%22:%22open%22,%22userId%22:%22103961307342447084491%22,%22resourceKeys%22:%7B%7D%7D&usp=sharing, https://drive.google.com/file/d/1T1kVeTCKFOIzPckOmAarcwHC8x0yau1i/view?usp=sharing, https://drive.google.com/file/d/1dAgihzWoQ03fPAECRX4qUzJiiJppPgwz/view?usp=sharing, https://drive.google.com/file/d/1gM89F4jZMNsWNTd9bxJxPfRxY0Y2Vfof/view?usp=sharing, https://drive.google.com/file/d/1hAf_3y-ecY6gAU67N0KzgqGZz1XrDjed/view?usp=sharing, https://drive.google.com/file/d/1iLEa4z_1QZHLh5VEurZg7rUHZneQzsY8/view?usp=sharing, https://drive.google.com/file/d/1jigzShY696C9WmGqx1js_OPVEWWBnXeg/view?usp=sharing, https://drive.google.com/file/d/1mO8_5fwtxIboAdjNo31vNNnNYbzI8-gq/view?usp=sharing, https://drive.google.com/file/d/1pswWDECjQfPpG_vPcb2bGTynwme8P6nA/view?usp=sharing, https://drive.google.com/file/d/1tbuyHau6G4TdCZ0v6u22_ePISFTSNU7r/view?usp=sharing, https://drive.google.com/file/d/1uC_hd3fJooXn4tQQsLJPU3mxW07hDGym/view?usp=sharing, https://drive.google.com/file/d/1yVM3DBOfyPfYckF4q1C8S0ce_9pMnUvz/view?usp=sharing
+

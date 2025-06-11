@@ -1,16 +1,18 @@
 # File: app/models/business/payment.py
-# (Reviewed and confirmed path and fields from previous generation, ensure relationships set)
 from sqlalchemy import Column, Integer, String, Date, Numeric, Text, ForeignKey, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.sql import func
-from app.models.base import Base, TimestampMixin
-from app.models.business.bank_account import BankAccount
-from app.models.accounting.currency import Currency # Corrected path
-from app.models.core.user import User
-from app.models.accounting.journal_entry import JournalEntry
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 import datetime
 from decimal import Decimal
+
+from app.models.base import Base, TimestampMixin
+from app.models.business.bank_account import BankAccount
+from app.models.accounting.currency import Currency
+from app.models.core.user import User
+from app.models.accounting.journal_entry import JournalEntry
+
+if TYPE_CHECKING:
+    from app.models.accounting.withholding_tax_certificate import WithholdingTaxCertificate
 
 class Payment(Base, TimestampMixin):
     __tablename__ = 'payments'
@@ -41,18 +43,20 @@ class Payment(Base, TimestampMixin):
 
     created_by_user_id: Mapped[int] = mapped_column("created_by", Integer, ForeignKey('core.users.id'), nullable=False)
     updated_by_user_id: Mapped[int] = mapped_column("updated_by", Integer, ForeignKey('core.users.id'), nullable=False)
-
-    bank_account: Mapped[Optional["BankAccount"]] = relationship("BankAccount", back_populates="payments")
+    
+    bank_account: Mapped[Optional["BankAccount"]] = relationship("BankAccount")
     currency: Mapped["Currency"] = relationship("Currency")
-    journal_entry: Mapped[Optional["JournalEntry"]] = relationship("JournalEntry") # Simplified
+    journal_entry: Mapped[Optional["JournalEntry"]] = relationship("JournalEntry")
     allocations: Mapped[List["PaymentAllocation"]] = relationship("PaymentAllocation", back_populates="payment", cascade="all, delete-orphan")
     created_by_user: Mapped["User"] = relationship("User", foreign_keys=[created_by_user_id])
     updated_by_user: Mapped["User"] = relationship("User", foreign_keys=[updated_by_user_id])
+    
+    wht_certificate: Mapped[Optional["WithholdingTaxCertificate"]] = relationship("WithholdingTaxCertificate", back_populates="payment", uselist=False, cascade="all, delete-orphan")
 
 class PaymentAllocation(Base, TimestampMixin):
     __tablename__ = 'payment_allocations'
     __table_args__ = (
-        CheckConstraint("document_type IN ('Sales Invoice', 'Purchase Invoice', 'Credit Note', 'Debit Note', 'Other')", name='ck_payment_allocations_doc_type'),
+        CheckConstraint("document_type IN ('Sales Invoice', 'Purchase Invoice', 'Credit Note', 'Debit Note', 'Other')", name='ck_payment_allocations_document_type'),
         {'schema': 'business'}
     )
 
@@ -65,4 +69,3 @@ class PaymentAllocation(Base, TimestampMixin):
     created_by_user_id: Mapped[int] = mapped_column("created_by", Integer, ForeignKey('core.users.id'), nullable=False)
 
     payment: Mapped["Payment"] = relationship("Payment", back_populates="allocations")
-    created_by_user: Mapped["User"] = relationship("User", foreign_keys=[created_by_user_id])

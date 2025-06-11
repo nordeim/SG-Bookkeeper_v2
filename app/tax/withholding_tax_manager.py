@@ -1,20 +1,72 @@
 # File: app/tax/withholding_tax_manager.py
 from typing import TYPE_CHECKING, Dict, Any, Optional
 from app.models.business.payment import Payment
+from app.models.accounting.withholding_tax_certificate import WithholdingTaxCertificate
+from app.utils.result import Result
 from decimal import Decimal
 
 if TYPE_CHECKING:
     from app.core.application_core import ApplicationCore 
     from app.services.journal_service import JournalService 
-    from app.services.tax_service import TaxCodeService
+    from app.services.tax_service import TaxCodeService, WHTCertificateService
+    from app.services.core_services import SequenceService
 
 class WithholdingTaxManager:
     def __init__(self, app_core: "ApplicationCore"): 
         self.app_core = app_core
         self.tax_code_service: "TaxCodeService" = app_core.tax_code_service
         self.journal_service: "JournalService" = app_core.journal_service
+        self.sequence_service: "SequenceService" = app_core.sequence_service
         self.logger = app_core.logger
         self.logger.info("WithholdingTaxManager initialized.")
+
+    async def create_wht_certificate_from_payment(self, payment: Payment, user_id: int) -> Result[WithholdingTaxCertificate]:
+        """
+        Creates and saves a WithholdingTaxCertificate record based on a given vendor payment.
+        """
+        if not payment or not payment.vendor:
+            return Result.failure(["Payment or associated vendor not provided."])
+        
+        if not payment.vendor.withholding_tax_applicable or payment.vendor.withholding_tax_rate is None:
+            return Result.failure([f"Vendor '{payment.vendor.name}' is not marked for WHT."])
+        
+        async with self.app_core.db_manager.session() as session:
+            # Check if a certificate for this payment already exists
+            existing_cert = await session.get(WithholdingTaxCertificate, payment.id, options=[]) # Assuming 1-to-1 on payment.id
+            if existing_cert:
+                return Result.failure([f"A WHT Certificate ({existing_cert.certificate_no}) already exists for this payment (ID: {payment.id})."])
+
+            form_data = await self.generate_s45_form_data(payment)
+            if not form_data:
+                return Result.failure(["Failed to generate S45 form data."])
+
+            try:
+                certificate_no = await self.sequence_service.get_next_sequence("wht_certificate")
+                
+                new_certificate = WithholdingTaxCertificate(
+                    certificate_no=certificate_no,
+                    vendor_id=payment.vendor_id,
+                    payment_id=payment.id,
+                    tax_rate=form_data["s45_wht_rate_percent"],
+                    gross_payment_amount=form_data["s45_gross_payment"],
+                    tax_amount=form_data["s45_wht_amount"],
+                    payment_date=form_data["s45_payment_date"],
+                    nature_of_payment=form_data["s45_nature_of_payment"],
+                    status='Draft', # Always starts as Draft
+                    created_by_user_id=user_id,
+                    updated_by_user_id=user_id
+                )
+                session.add(new_certificate)
+                await session.flush()
+                await session.refresh(new_certificate)
+                
+                self.logger.info(f"Created WHT Certificate '{certificate_no}' for Payment ID {payment.id}.")
+                return Result.success(new_certificate)
+
+            except Exception as e:
+                self.logger.error(f"Error creating WHT certificate for Payment ID {payment.id}: {e}", exc_info=True)
+                return Result.failure([f"An unexpected error occurred: {str(e)}"])
+
 
     async def generate_s45_form_data(self, payment: Payment) -> Dict[str, Any]:
         """
@@ -32,7 +84,6 @@ class WithholdingTaxManager:
             return {}
             
         wht_rate = vendor.withholding_tax_rate
-        # The amount subject to WHT is the gross amount of the payment.
         gross_payment_amount = payment.amount
         wht_amount = (gross_payment_amount * wht_rate) / 100
 
@@ -42,7 +93,6 @@ class WithholdingTaxManager:
             "tax_ref_no": company_settings.uen_no if company_settings else "N/A",
         }
 
-        # The nature of payment is context-dependent. This is a sensible default.
         nature_of_payment = f"Payment for services rendered by {vendor.name}"
 
         form_data = {
@@ -61,14 +111,5 @@ class WithholdingTaxManager:
         return form_data
 
     async def record_wht_payment(self, certificate_id: int, payment_date: str, reference: str):
-        """
-        This method would be responsible for creating the journal entry when the withheld tax
-        is actually paid to IRAS. This is a separate process from the initial payment to the vendor.
-        """
         self.logger.info(f"Recording WHT payment for certificate {certificate_id} (stub).")
-        # Logic would involve:
-        # 1. Fetching the WHT certificate/liability record.
-        # 2. Creating a JE: Dr WHT Payable, Cr Bank.
-        # 3. Posting the JE.
-        # 4. Updating the certificate status to 'Paid'.
         return True
