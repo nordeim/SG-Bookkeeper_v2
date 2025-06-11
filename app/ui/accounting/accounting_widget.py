@@ -1,5 +1,5 @@
 # File: app/ui/accounting/accounting_widget.py
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QTabWidget, QGroupBox, QHBoxLayout, QPushButton, QDateEdit, QMessageBox, QDialog
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QTabWidget, QGroupBox, QHBoxLayout, QPushButton, QDateEdit, QMessageBox, QDialog, QDialogButtonBox
 from PySide6.QtGui import QIcon
 from PySide6.QtCore import Slot, QDate, QTimer, QMetaObject, Q_ARG, Qt
 
@@ -9,6 +9,7 @@ from app.core.application_core import ApplicationCore
 from app.main import schedule_task_from_qt
 from app.utils.result import Result
 from app.models.accounting.journal_entry import JournalEntry
+from datetime import date
 
 class AccountingWidget(QWidget):
     def __init__(self, app_core: ApplicationCore, parent=None): 
@@ -36,11 +37,15 @@ class AccountingWidget(QWidget):
         main_layout = QVBoxLayout(widget)
         main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
+        icon_path_prefix = "" 
+        try: import app.resources_rc; icon_path_prefix = ":/icons/"
+        except ImportError: icon_path_prefix = "resources/icons/"
+
         forex_group = QGroupBox("Foreign Currency Revaluation")
         forex_layout = QHBoxLayout(forex_group)
         forex_layout.addWidget(QLabel("This process calculates and posts reversing journal entries for unrealized gains or losses on open foreign currency balances."))
         forex_layout.addStretch()
-        self.run_forex_button = QPushButton(QIcon(":/icons/accounting.svg"), "Run Forex Revaluation...")
+        self.run_forex_button = QPushButton(QIcon(icon_path_prefix + "accounting.svg"), "Run Forex Revaluation...")
         self.run_forex_button.clicked.connect(self._on_run_forex_revaluation)
         forex_layout.addWidget(self.run_forex_button)
         main_layout.addWidget(forex_group)
@@ -90,7 +95,12 @@ class AccountingWidget(QWidget):
                 self.run_forex_button.setEnabled(False)
                 self.run_forex_button.setText("Processing...")
                 future = schedule_task_from_qt(self.app_core.forex_manager.create_unrealized_gain_loss_je(reval_date, self.app_core.current_user.id))
-                future.add_done_callback(self._handle_forex_revaluation_result)
+                if future:
+                    future.add_done_callback(self._handle_forex_revaluation_result)
+                else:
+                    self.run_forex_button.setEnabled(True)
+                    self.run_forex_button.setText("Run Forex Revaluation...")
+                    QMessageBox.critical(self, "Error", "Failed to schedule the forex revaluation task.")
 
     def _handle_forex_revaluation_result(self, future):
         self.run_forex_button.setEnabled(True)
@@ -101,7 +111,7 @@ class AccountingWidget(QWidget):
                 if result.value:
                     QMessageBox.information(self, "Success", f"Foreign currency revaluation complete.\nJournal Entry '{result.value.entry_no}' and its reversal have been created and posted.")
                 else:
-                    QMessageBox.information(self, "Completed", "Foreign currency revaluation run successfully. No adjustments were needed.")
+                    QMessageBox.information(self, "Completed", "Foreign currency revaluation run successfully. No significant adjustments were needed.")
             else:
                 QMessageBox.critical(self, "Error", f"Forex revaluation failed:\n{', '.join(result.errors)}")
         except Exception as e:

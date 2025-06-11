@@ -4,14 +4,10 @@ from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta 
 from decimal import Decimal
 
-# REMOVED: from app.services.tax_service import TaxCodeService, GSTReturnService 
-# REMOVED: from app.services.account_service import AccountService
-# REMOVED: from app.services.fiscal_period_service import FiscalPeriodService
-# REMOVED: from app.services.core_services import CompanySettingsService 
 from app.utils.result import Result
 from app.utils.pydantic_models import GSTReturnData, JournalEntryData, JournalEntryLineData, GSTTransactionLineDetail
 from app.models.accounting.gst_return import GSTReturn 
-from app.models.accounting.journal_entry import JournalEntry, JournalEntryLine # Keep specific model imports
+from app.models.accounting.journal_entry import JournalEntry, JournalEntryLine
 from app.models.accounting.account import Account
 from app.models.accounting.tax_code import TaxCode
 from app.common.enums import GSTReturnStatusEnum 
@@ -19,31 +15,23 @@ from app.common.enums import GSTReturnStatusEnum
 if TYPE_CHECKING:
     from app.core.application_core import ApplicationCore 
     from app.services.journal_service import JournalService 
-    from app.utils.sequence_generator import SequenceGenerator
-    from app.services.tax_service import TaxCodeService, GSTReturnService # ADDED
-    from app.services.account_service import AccountService # ADDED
-    from app.services.fiscal_period_service import FiscalPeriodService # ADDED
-    from app.services.core_services import CompanySettingsService # ADDED
+    from app.services.tax_service import TaxCodeService, GSTReturnService
+    from app.services.account_service import AccountService
+    from app.services.fiscal_period_service import FiscalPeriodService
+    from app.services.core_services import CompanySettingsService, SequenceService
 
 
 class GSTManager:
-    def __init__(self, 
-                 tax_code_service: "TaxCodeService", 
-                 journal_service: "JournalService", 
-                 company_settings_service: "CompanySettingsService", 
-                 gst_return_service: "GSTReturnService",
-                 account_service: "AccountService", 
-                 fiscal_period_service: "FiscalPeriodService", 
-                 sequence_generator: "SequenceGenerator", 
-                 app_core: "ApplicationCore"): 
-        self.tax_code_service = tax_code_service
-        self.journal_service = journal_service
-        self.company_settings_service = company_settings_service
-        self.gst_return_service = gst_return_service
-        self.account_service = account_service 
-        self.fiscal_period_service = fiscal_period_service 
-        self.sequence_generator = sequence_generator
+    def __init__(self, app_core: "ApplicationCore"): 
         self.app_core = app_core
+        self.tax_code_service: "TaxCodeService" = app_core.tax_code_service
+        self.journal_service: "JournalService" = app_core.journal_service
+        self.company_settings_service: "CompanySettingsService" = app_core.company_settings_service
+        self.gst_return_service: "GSTReturnService" = app_core.gst_return_service
+        self.account_service: "AccountService" = app_core.account_service
+        self.fiscal_period_service: "FiscalPeriodService" = app_core.fiscal_period_service
+        self.sequence_service: "SequenceService" = app_core.sequence_service
+        self.logger = app_core.logger
 
     async def prepare_gst_return_data(self, start_date: date, end_date: date, user_id: int) -> Result[GSTReturnData]:
         company_settings = await self.company_settings_service.get_company_settings()
@@ -170,7 +158,7 @@ class GSTManager:
             saved_return = await self.gst_return_service.save_gst_return(orm_return)
             return Result.success(saved_return)
         except Exception as e:
-            self.app_core.logger.error(f"Failed to save GST return: {e}", exc_info=True) # type: ignore
+            self.app_core.logger.error(f"Failed to save GST return: {e}", exc_info=True)
             return Result.failure([f"Failed to save GST return: {str(e)}"])
 
     async def finalize_gst_return(self, return_id: int, submission_reference: str, submission_date: date, user_id: int) -> Result[GSTReturn]:
@@ -190,9 +178,9 @@ class GSTManager:
             gst_input_tax_acc_code = await self.app_core.configuration_service.get_config_value("SysAcc_DefaultGSTInput", "SYS-GST-INPUT")
             gst_control_acc_code = await self.app_core.configuration_service.get_config_value("SysAcc_GSTControl", "SYS-GST-CONTROL")
             
-            output_tax_acc = await self.account_service.get_by_code(gst_output_tax_acc_code) # type: ignore
-            input_tax_acc = await self.account_service.get_by_code(gst_input_tax_acc_code) # type: ignore
-            control_acc = await self.account_service.get_by_code(gst_control_acc_code) if gst_control_acc_code else None # type: ignore
+            output_tax_acc = await self.account_service.get_by_code(gst_output_tax_acc_code)
+            input_tax_acc = await self.account_service.get_by_code(gst_input_tax_acc_code)
+            control_acc = await self.account_service.get_by_code(gst_control_acc_code) if gst_control_acc_code else None
 
             if not (output_tax_acc and input_tax_acc and control_acc):
                 missing_accs = []
@@ -200,7 +188,7 @@ class GSTManager:
                 if not input_tax_acc: missing_accs.append(str(gst_input_tax_acc_code))
                 if not control_acc: missing_accs.append(str(gst_control_acc_code))
                 error_msg = f"Essential GST GL accounts not found: {', '.join(missing_accs)}. Cannot create settlement journal entry."
-                self.app_core.logger.error(error_msg) # type: ignore
+                self.app_core.logger.error(error_msg)
                 try:
                     updated_return_no_je = await self.gst_return_service.save_gst_return(gst_return)
                     return Result.failure([f"GST Return finalized (ID: {updated_return_no_je.id}), but JE creation failed: " + error_msg])
@@ -243,10 +231,10 @@ class GSTManager:
                     gst_return.journal_entry_id = je_result.value.id
                     post_result: Result[JournalEntry] = await self.app_core.journal_entry_manager.post_journal_entry(je_result.value.id, user_id)
                     if not post_result.is_success:
-                        self.app_core.logger.warning(f"GST Settlement JE (ID: {je_result.value.id}) created but failed to auto-post: {post_result.errors}") # type: ignore
+                        self.app_core.logger.warning(f"GST Settlement JE (ID: {je_result.value.id}) created but failed to auto-post: {post_result.errors}")
         try:
             updated_return = await self.gst_return_service.save_gst_return(gst_return)
             return Result.success(updated_return)
         except Exception as e:
-            self.app_core.logger.error(f"Failed to save finalized GST return: {e}", exc_info=True) # type: ignore
+            self.app_core.logger.error(f"Failed to save finalized GST return: {e}", exc_info=True)
             return Result.failure([f"Failed to save finalized GST return: {str(e)}"])

@@ -1,6 +1,7 @@
 # File: app/tax/withholding_tax_manager.py
-from typing import TYPE_CHECKING, Dict, Any
+from typing import TYPE_CHECKING, Dict, Any, Optional
 from app.models.business.payment import Payment
+from decimal import Decimal
 
 if TYPE_CHECKING:
     from app.core.application_core import ApplicationCore 
@@ -25,24 +26,24 @@ class WithholdingTaxManager:
             self.logger.error(f"Cannot generate S45 data: Payment {payment.id} or its vendor is not loaded.")
             return {}
 
-        # The amount subject to WHT is the gross amount of the invoice(s) paid, not the net cash outflow.
-        # This manager needs the gross amount before WHT was deducted. The `payment.amount` is the gross.
-        gross_payment_amount = payment.amount
-        
         vendor = payment.vendor
-        wht_rate = vendor.withholding_tax_rate if vendor.withholding_tax_applicable else None
-        
-        if wht_rate is None:
-             self.logger.warning(f"Vendor '{vendor.name}' has no WHT rate specified for Payment ID {payment.id}.")
-             wht_amount = 0
-        else:
-             wht_amount = (gross_payment_amount * wht_rate) / 100
+        if not vendor.withholding_tax_applicable or vendor.withholding_tax_rate is None:
+            self.logger.warning(f"S45 data requested for payment {payment.id}, but vendor '{vendor.name}' is not marked for WHT.")
+            return {}
+            
+        wht_rate = vendor.withholding_tax_rate
+        # The amount subject to WHT is the gross amount of the payment.
+        gross_payment_amount = payment.amount
+        wht_amount = (gross_payment_amount * wht_rate) / 100
 
         company_settings = await self.app_core.company_settings_service.get_company_settings()
         payer_details = {
             "name": company_settings.company_name if company_settings else "N/A",
             "tax_ref_no": company_settings.uen_no if company_settings else "N/A",
         }
+
+        # The nature of payment is context-dependent. This is a sensible default.
+        nature_of_payment = f"Payment for services rendered by {vendor.name}"
 
         form_data = {
             "s45_payee_name": vendor.name,
@@ -51,7 +52,7 @@ class WithholdingTaxManager:
             "s45_payer_name": payer_details["name"],
             "s45_payer_tax_ref": payer_details["tax_ref_no"],
             "s45_payment_date": payment.payment_date,
-            "s45_nature_of_payment": "Director's Remuneration or Fees", # This needs to be determined based on context
+            "s45_nature_of_payment": nature_of_payment,
             "s45_gross_payment": gross_payment_amount,
             "s45_wht_rate_percent": wht_rate,
             "s45_wht_amount": wht_amount,
