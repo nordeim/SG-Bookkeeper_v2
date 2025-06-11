@@ -9,15 +9,8 @@ from sqlalchemy.orm import selectinload
 from app.models.business.sales_invoice import SalesInvoice, SalesInvoiceLine
 from app.models.business.customer import Customer
 from app.models.business.product import Product
-# REMOVED: from app.models.accounting.tax_code import TaxCode # Not directly used here, TaxCodeService is
 from app.models.accounting.journal_entry import JournalEntry 
 from app.models.business.inventory_movement import InventoryMovement 
-
-# REMOVED: from app.services.business_services import SalesInvoiceService, CustomerService, ProductService, InventoryMovementService
-# REMOVED: from app.services.core_services import SequenceService, ConfigurationService 
-# REMOVED: from app.services.tax_service import TaxCodeService 
-# REMOVED: from app.services.account_service import AccountService 
-# REMOVED: from app.tax.tax_calculator import TaxCalculator 
 
 from app.utils.result import Result
 from app.utils.pydantic_models import (
@@ -34,7 +27,7 @@ if TYPE_CHECKING:
     from app.services.tax_service import TaxCodeService
     from app.services.account_service import AccountService
     from app.tax.tax_calculator import TaxCalculator
-    from app.models.accounting.tax_code import TaxCode # Keep for TaxCodeService method returns if needed
+    from app.models.accounting.tax_code import TaxCode
 
 class SalesInvoiceManager:
     def __init__(self, 
@@ -263,6 +256,16 @@ class SalesInvoiceManager:
 
     async def get_invoices_for_listing(self, customer_id: Optional[int]=None, status:Optional[InvoiceStatusEnum]=None, start_date:Optional[date]=None, end_date:Optional[date]=None, page:int=1, page_size:int=50) -> Result[List[SalesInvoiceSummaryData]]:
         try:
-            summaries = await self.sales_invoice_service.get_all_summary(customer_id=customer_id, status=status, start_date=start_date, end_date=end_date, page=page, page_size=page_size)
+            summaries = await self.sales_invoice_service.get_all_summary(
+                customer_id=customer_id, 
+                status_list=[status] if status else None, 
+                start_date=start_date, 
+                end_date=end_date, 
+                page=page, 
+                page_size=page_size
+            )
             return Result.success(summaries)
-        except Exception as e: self.logger.error(f"Error fetching SI listing: {e}", exc_info=True); return Result.failure([f"Failed to retrieve SI list: {str(e)}"])
+        except Exception as e: 
+            self.logger.error(f"Error fetching SI listing: {e}", exc_info=True)
+            # Re-raise or handle the TypeError specifically if needed, but for now, the generic catch is fine.
+            return Result.failure([f"Failed to retrieve SI list: {str(e)}"])

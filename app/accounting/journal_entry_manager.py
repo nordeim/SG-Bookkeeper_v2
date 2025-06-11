@@ -11,8 +11,6 @@ from sqlalchemy.orm import selectinload
 from app.models import JournalEntry, JournalEntryLine, RecurringPattern, FiscalPeriod, Account
 from app.models.business.bank_account import BankAccount
 from app.models.business.bank_transaction import BankTransaction
-# REMOVED: from app.services.account_service import AccountService
-# REMOVED: from app.services.fiscal_period_service import FiscalPeriodService
 from app.utils.result import Result
 from app.utils.pydantic_models import JournalEntryData, JournalEntryLineData 
 from app.common.enums import JournalTypeEnum, BankTransactionTypeEnum
@@ -20,14 +18,14 @@ from app.common.enums import JournalTypeEnum, BankTransactionTypeEnum
 if TYPE_CHECKING:
     from app.core.application_core import ApplicationCore
     from app.services.journal_service import JournalService 
-    from app.services.account_service import AccountService # MOVED HERE
-    from app.services.fiscal_period_service import FiscalPeriodService # MOVED HERE
+    from app.services.account_service import AccountService
+    from app.services.fiscal_period_service import FiscalPeriodService
 
 class JournalEntryManager:
     def __init__(self, 
                  journal_service: "JournalService", 
-                 account_service: "AccountService", # Changed to string literal or rely on TYPE_CHECKING
-                 fiscal_period_service: "FiscalPeriodService", # Changed to string literal or rely on TYPE_CHECKING
+                 account_service: "AccountService",
+                 fiscal_period_service: "FiscalPeriodService",
                  app_core: "ApplicationCore"):
         self.journal_service = journal_service
         self.account_service = account_service
@@ -94,87 +92,59 @@ class JournalEntryManager:
 
     async def post_journal_entry(self, entry_id: int, user_id: int, session: Optional[AsyncSession] = None) -> Result[JournalEntry]:
         async def _post_je_logic(current_session: AsyncSession):
-            entry = await current_session.get(
-                JournalEntry, entry_id, 
-                options=[selectinload(JournalEntry.lines).selectinload(JournalEntryLine.account)]
-            )
+            entry = await current_session.get(JournalEntry, entry_id, options=[selectinload(JournalEntry.lines).selectinload(JournalEntryLine.account)])
             if not entry: return Result.failure([f"JE ID {entry_id} not found."])
             if entry.is_posted: return Result.failure([f"JE '{entry.entry_no}' is already posted."])
-            
             fiscal_period = await current_session.get(FiscalPeriod, entry.fiscal_period_id)
-            if not fiscal_period or fiscal_period.status != 'Open': 
-                return Result.failure([f"Cannot post. Fiscal period not open. Status: {fiscal_period.status if fiscal_period else 'Unknown'}."])
-            
-            entry.is_posted = True
-            entry.updated_by_user_id = user_id
-            current_session.add(entry)
-            await current_session.flush()
-            
+            if not fiscal_period or fiscal_period.status != 'Open': return Result.failure([f"Cannot post. Fiscal period not open. Status: {fiscal_period.status if fiscal_period else 'Unknown'}."])
+            entry.is_posted = True; entry.updated_by_user_id = user_id; current_session.add(entry); await current_session.flush()
             for line in entry.lines:
                 if line.account and line.account.is_bank_account:
                     bank_account_stmt = select(BankAccount).where(BankAccount.gl_account_id == line.account_id)
-                    bank_account_res = await current_session.execute(bank_account_stmt)
-                    linked_bank_account = bank_account_res.scalars().first()
-
+                    bank_account_res = await current_session.execute(bank_account_stmt); linked_bank_account = bank_account_res.scalars().first()
                     if linked_bank_account:
-                        bank_txn_amount = line.debit_amount - line.credit_amount
-                        bank_txn_type_enum: BankTransactionTypeEnum
+                        bank_txn_amount = line.debit_amount - line.credit_amount; bank_txn_type_enum: BankTransactionTypeEnum
                         if bank_txn_amount > Decimal(0): bank_txn_type_enum = BankTransactionTypeEnum.DEPOSIT
                         elif bank_txn_amount < Decimal(0): bank_txn_type_enum = BankTransactionTypeEnum.WITHDRAWAL
                         else: continue 
-
-                        new_bank_txn = BankTransaction(
-                            bank_account_id=linked_bank_account.id,
-                            transaction_date=entry.entry_date, value_date=entry.entry_date,
-                            transaction_type=bank_txn_type_enum.value,
-                            description=f"JE: {entry.entry_no} - {line.description or entry.description or 'Journal Posting'}",
-                            reference=entry.entry_no, amount=bank_txn_amount,
-                            is_from_statement=False, is_reconciled=False,
-                            journal_entry_id=entry.id,
-                            created_by_user_id=user_id, updated_by_user_id=user_id
-                        )
-                        current_session.add(new_bank_txn)
-                        self.logger.info(f"Auto-created BankTransaction for JE line {line.id} (Account: {line.account.code}) linked to Bank Account {linked_bank_account.id}")
-                    else:
-                        self.logger.warning(f"JE line {line.id} affects GL account {line.account.code} which is_bank_account=True, but no BankAccount record is linked to it. No BankTransaction created.")
-            
-            await current_session.flush()
-            await current_session.refresh(entry)
-            return Result.success(entry)
-
+                        new_bank_txn = BankTransaction(bank_account_id=linked_bank_account.id, transaction_date=entry.entry_date, value_date=entry.entry_date, transaction_type=bank_txn_type_enum.value, description=f"JE: {entry.entry_no} - {line.description or entry.description or 'Journal Posting'}", reference=entry.entry_no, amount=bank_txn_amount, is_from_statement=False, is_reconciled=False, journal_entry_id=entry.id, created_by_user_id=user_id, updated_by_user_id=user_id)
+                        current_session.add(new_bank_txn); self.logger.info(f"Auto-created BankTransaction for JE line {line.id} (Account: {line.account.code}) linked to Bank Account {linked_bank_account.id}")
+                    else: self.logger.warning(f"JE line {line.id} affects GL account {line.account.code} which is_bank_account=True, but no BankAccount record is linked to it. No BankTransaction created.")
+            await current_session.flush(); await current_session.refresh(entry); return Result.success(entry)
         if session: return await _post_je_logic(session)
         else:
             try:
                 async with self.app_core.db_manager.session() as new_session: # type: ignore
                     return await _post_je_logic(new_session)
-            except Exception as e: 
-                self.logger.error(f"Error posting JE ID {entry_id} with new session: {e}", exc_info=True)
-                return Result.failure([f"Failed to post JE: {str(e)}"])
+            except Exception as e: self.logger.error(f"Error posting JE ID {entry_id} with new session: {e}", exc_info=True); return Result.failure([f"Failed to post JE: {str(e)}"])
 
-    async def reverse_journal_entry(self, entry_id: int, reversal_date: date, description: Optional[str], user_id: int) -> Result[JournalEntry]:
+    async def create_reversing_entry(self, original_entry_id: int, reversal_date: date, user_id: int, description: Optional[str] = None) -> Result[JournalEntry]:
         async with self.app_core.db_manager.session() as session: # type: ignore
-            original_entry = await session.get(JournalEntry, entry_id, options=[selectinload(JournalEntry.lines)])
-            if not original_entry: return Result.failure([f"JE ID {entry_id} not found for reversal."])
+            original_entry = await session.get(JournalEntry, original_entry_id, options=[selectinload(JournalEntry.lines)])
+            if not original_entry: return Result.failure([f"JE ID {original_entry_id} not found for reversal."])
             if not original_entry.is_posted: return Result.failure(["Only posted entries can be reversed."])
             if original_entry.is_reversed or original_entry.reversing_entry_id is not None: return Result.failure([f"Entry '{original_entry.entry_no}' is already reversed."])
-            reversal_fp_stmt = select(FiscalPeriod).where(FiscalPeriod.start_date <= reversal_date, FiscalPeriod.end_date >= reversal_date, FiscalPeriod.status == 'Open')
-            reversal_fp_res = await session.execute(reversal_fp_stmt); reversal_fiscal_period = reversal_fp_res.scalars().first()
-            if not reversal_fiscal_period: return Result.failure([f"No open fiscal period for reversal date {reversal_date} or period not open."])
             
-            reversal_lines_dto: List[JournalEntryLineData] = []
-            for orig_line in original_entry.lines:
-                reversal_lines_dto.append(JournalEntryLineData(account_id=orig_line.account_id, description=f"Reversal: {orig_line.description or ''}", debit_amount=orig_line.credit_amount, credit_amount=orig_line.debit_amount, currency_code=orig_line.currency_code, exchange_rate=orig_line.exchange_rate, tax_code=orig_line.tax_code, tax_amount=-orig_line.tax_amount if orig_line.tax_amount is not None else Decimal(0), dimension1_id=orig_line.dimension1_id, dimension2_id=orig_line.dimension2_id))
-            reversal_je_data = JournalEntryData(journal_type=original_entry.journal_type, entry_date=reversal_date, description=description or f"Reversal of entry {original_entry.entry_no}", reference=f"REV:{original_entry.entry_no}", is_posted=False, source_type="JournalEntryReversalSource", source_id=original_entry.id, user_id=user_id, lines=reversal_lines_dto)
+            reversal_lines_dto = [JournalEntryLineData(account_id=line.account_id, description=f"Reversal: {line.description or ''}", debit_amount=line.credit_amount, credit_amount=line.debit_amount, currency_code=line.currency_code, exchange_rate=line.exchange_rate, tax_code=line.tax_code, tax_amount=-(line.tax_amount or Decimal(0)), dimension1_id=line.dimension1_id, dimension2_id=line.dimension2_id) for line in original_entry.lines]
+            reversal_desc = description or f"Reversal of entry {original_entry.entry_no}"
+            
+            reversal_je_data = JournalEntryData(journal_type=original_entry.journal_type, entry_date=reversal_date, description=reversal_desc, reference=f"REV:{original_entry.entry_no}", user_id=user_id, lines=reversal_lines_dto, source_type="JournalEntryReversalSource", source_id=original_entry.id)
+            
             create_reversal_result = await self.create_journal_entry(reversal_je_data, session=session)
             if not create_reversal_result.is_success or not create_reversal_result.value: return Result.failure(["Failed to create reversal JE."] + create_reversal_result.errors)
+            
             reversal_je_orm = create_reversal_result.value
             original_entry.is_reversed = True; original_entry.reversing_entry_id = reversal_je_orm.id
             original_entry.updated_by_user_id = user_id; session.add(original_entry)
+            
             try:
                 await session.flush(); await session.refresh(reversal_je_orm)
                 if reversal_je_orm.lines: await session.refresh(reversal_je_orm, attribute_names=['lines'])
                 return Result.success(reversal_je_orm)
-            except Exception as e: self.logger.error(f"Error reversing JE ID {entry_id} (flush/commit stage): {e}", exc_info=True); return Result.failure([f"Failed to finalize reversal: {str(e)}"])
+            except Exception as e: self.logger.error(f"Error reversing JE ID {original_entry_id} (flush/commit stage): {e}", exc_info=True); return Result.failure([f"Failed to finalize reversal: {str(e)}"])
+
+    async def reverse_journal_entry(self, entry_id: int, reversal_date: date, description: Optional[str], user_id: int) -> Result[JournalEntry]:
+        return await self.create_reversing_entry(entry_id, reversal_date, user_id, description)
 
     def _calculate_next_generation_date(self, last_date: date, frequency: str, interval: int, day_of_month: Optional[int] = None, day_of_week: Optional[int] = None) -> date:
         next_date = last_date
@@ -190,10 +160,7 @@ class JournalEntryManager:
                 except ValueError: next_date = next_date.replace(month=last_date.month) + relativedelta(day=31)
         elif frequency == 'Weekly':
             next_date = last_date + relativedelta(weeks=interval)
-            if day_of_week is not None: 
-                 current_weekday = next_date.weekday() 
-                 days_to_add = (day_of_week - current_weekday + 7) % 7
-                 next_date += timedelta(days=days_to_add)
+            if day_of_week is not None: current_weekday = next_date.weekday(); days_to_add = (day_of_week - current_weekday + 7) % 7; next_date += timedelta(days=days_to_add)
         elif frequency == 'Daily': next_date = last_date + relativedelta(days=interval)
         elif frequency == 'Quarterly':
             next_date = last_date + relativedelta(months=interval * 3)
@@ -222,7 +189,7 @@ class JournalEntryManager:
                             next_gen = self._calculate_next_generation_date(pattern_to_update.last_generated_date, pattern_to_update.frequency, pattern_to_update.interval_value, pattern_to_update.day_of_month, pattern_to_update.day_of_week)
                             if pattern_to_update.end_date and next_gen > pattern_to_update.end_date: pattern_to_update.next_generation_date = None; pattern_to_update.is_active = False 
                             else: pattern_to_update.next_generation_date = next_gen
-                        except NotImplementedError: pattern_to_update.next_generation_date = None; pattern_to_update.is_active = False; self.logger.warning(f"Next gen date calc not implemented for pattern {pattern_to_update.name}, deactivating.") # type: ignore
+                        except NotImplementedError: pattern_to_update.next_generation_date = None; pattern_to_update.is_active = False; self.logger.warning(f"Next gen date calc not implemented for pattern {pattern_to_update.name}, deactivating.")
                         pattern_to_update.updated_by_user_id = user_id; session.add(pattern_to_update); await session.commit()
                     else: self.logger.error(f"Failed to re-fetch pattern ID {pattern.id} for update after recurring JE generation.") 
         return generated_results

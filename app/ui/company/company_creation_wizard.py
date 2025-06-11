@@ -16,8 +16,7 @@ class CompanyCreationWizard(QWizard):
         self.addPage(DetailsPage())
         self.addPage(FinalPage())
         self.setWindowTitle("New Company Setup Wizard")
-        # Use the classic style which is often clearer on all platforms
-        self.setWizardStyle(QWizard.WizardStyle.ClassicStyle)
+        self.setWizardStyle(QWizard.WizardStyle.ModernStyle)
         self.setMinimumSize(500, 400)
 
 
@@ -74,7 +73,6 @@ class DetailsPage(QWizardPage):
         
         self.setLayout(layout)
         
-        # Connect signal to auto-populate DB name
         self.company_name_edit.textChanged.connect(self.auto_populate_db_name)
 
     def auto_populate_db_name(self, text: str):

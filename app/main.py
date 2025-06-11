@@ -3,7 +3,7 @@ import sys
 import asyncio
 import threading
 from pathlib import Path
-from typing import Optional, Any, List, Dict # Added List, Dict
+from typing import Optional, Any, List, Dict
 
 from PySide6.QtWidgets import QApplication, QSplashScreen, QLabel, QMessageBox
 from PySide6.QtCore import Qt, QSettings, QTimer, QCoreApplication, QMetaObject, Signal, Slot, Q_ARG, QProcess
@@ -56,9 +56,7 @@ class Application(QApplication):
         self.setApplicationName("SGBookkeeper"); self.setApplicationVersion("1.0.0"); self.setOrganizationName("SGBookkeeperOrg"); self.setOrganizationDomain("sgbookkeeper.org") 
         
         splash_pixmap = None
-        try:
-            import app.resources_rc 
-            splash_pixmap = QPixmap(":/images/splash.png")
+        try: import app.resources_rc; splash_pixmap = QPixmap(":/images/splash.png")
         except ImportError:
             base_path = Path(__file__).resolve().parent.parent 
             splash_image_path = base_path / "resources" / "images" / "splash.png"
@@ -68,8 +66,7 @@ class Application(QApplication):
         if splash_pixmap is None or splash_pixmap.isNull():
             self.splash = QSplashScreen(); pm = QPixmap(400,200); pm.fill(Qt.GlobalColor.lightGray)
             self.splash.setPixmap(pm); self.splash.showMessage("Loading SG Bookkeeper...", Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignBottom, Qt.GlobalColor.black)
-        else:
-            self.splash = QSplashScreen(splash_pixmap, Qt.WindowType.WindowStaysOnTopHint); self.splash.setObjectName("SplashScreen")
+        else: self.splash = QSplashScreen(splash_pixmap, Qt.WindowType.WindowStaysOnTopHint); self.splash.setObjectName("SplashScreen")
 
         self.splash.show(); self.processEvents() 
         
@@ -85,17 +82,22 @@ class Application(QApplication):
     def _on_initialization_done(self, success: bool, result_or_error: Any):
         if success:
             self.app_core = result_or_error 
-            if not self.app_core:
-                 QMessageBox.critical(None, "Fatal Error", "App core not received on successful initialization."); self.quit(); return
+            if not self.app_core: QMessageBox.critical(None, "Fatal Error", "App core not received on successful initialization."); self.quit(); return
             self.main_window = MainWindow(self.app_core); self.main_window.show(); self.splash.finish(self.main_window)
         else:
             self.splash.hide()
             error_message = str(result_or_error) if result_or_error else "An unknown error occurred during initialization."
             print(f"Critical error during application startup: {error_message}") 
             if isinstance(result_or_error, Exception) and result_or_error.__traceback__:
-                import traceback
-                traceback.print_exception(type(result_or_error), result_or_error, result_or_error.__traceback__)
-            QMessageBox.critical(None, "Application Initialization Error", f"An error occurred during application startup:\n{error_message[:500]}\n\nThe application will now exit."); self.quit()
+                import traceback; traceback.print_exception(type(result_or_error), result_or_error, result_or_error.__traceback__)
+            # For the "No company database selected" error, we create a dummy core and let MainWindow handle it.
+            if isinstance(result_or_error, ValueError) and "No company database selected" in str(result_or_error):
+                config_manager = ConfigManager(app_name=QCoreApplication.applicationName())
+                db_manager = DatabaseManager(config_manager) # Will have no DB name
+                self.app_core = ApplicationCore(config_manager, db_manager, minimal_init=True)
+                self.main_window = MainWindow(self.app_core); self.main_window.show()
+            else:
+                QMessageBox.critical(None, "Application Initialization Error", f"An error occurred during application startup:\n{error_message[:500]}\n\nThe application will now exit."); self.quit()
 
     async def initialize_app(self):
         current_app_core = None
@@ -108,10 +110,6 @@ class Application(QApplication):
             config_manager = ConfigManager(app_name=QCoreApplication.applicationName())
             db_config = config_manager.get_database_config()
             if not db_config.database or db_config.database == "sg_bookkeeper_default":
-                 # If no company DB is selected, we can't fully initialize. We'll let MainWindow handle this.
-                 # For now, let's proceed with a basic core that doesn't try to initialize the DB services.
-                 # Or better, we can skip DB initialization and have MainWindow prompt user.
-                 # Let's pass a special error to the main thread.
                 raise ValueError("No company database selected. Please select or create a company.")
 
             update_splash_threadsafe("Initializing database manager...")
@@ -122,8 +120,7 @@ class Application(QApplication):
 
             if not current_app_core.current_user: 
                 authenticated_user = await current_app_core.security_manager.authenticate_user("admin", "password")
-                if not authenticated_user:
-                    print("Default admin/password authentication failed or no such user. MainWindow should handle login.")
+                if not authenticated_user: print("Default admin/password authentication failed or no such user. MainWindow should handle login.")
 
             update_splash_threadsafe("Finalizing initialization...")
             self.initialization_done_signal.emit(True, current_app_core) 

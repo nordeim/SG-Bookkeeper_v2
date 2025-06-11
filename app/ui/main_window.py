@@ -115,6 +115,23 @@ class MainWindow(QMainWindow):
     
     @Slot()
     def on_new_company(self):
+        self._handle_new_company_request()
+
+    @Slot()
+    def on_open_company(self):
+        self._open_company_manager()
+    
+    def _open_company_manager(self):
+        dialog = CompanyManagerDialog(self.app_core, self)
+        result = dialog.exec()
+        if result == CompanyManagerDialog.NewCompanyRequest:
+            self._handle_new_company_request()
+        elif result == CompanyManagerDialog.OpenCompanyRequest:
+            selected_info = dialog.get_selected_company_info()
+            if selected_info:
+                self.switch_company_database(selected_info['database_name'])
+    
+    def _handle_new_company_request(self):
         wizard = CompanyCreationWizard(self)
         if wizard.exec() == QDialog.DialogCode.Accepted:
             company_details = {
@@ -124,17 +141,6 @@ class MainWindow(QMainWindow):
             if company_details:
                 self._create_new_company_db(company_details)
 
-    @Slot()
-    def on_open_company(self):
-        dialog = CompanyManagerDialog(self.app_core, self)
-        result = dialog.exec()
-        if result == CompanyManagerDialog.NewCompanyRequest:
-            self.on_new_company()
-        elif result == CompanyManagerDialog.OpenCompanyRequest:
-            selected_info = dialog.get_selected_company_info()
-            if selected_info:
-                self.switch_company_database(selected_info['database_name'])
-    
     def _create_new_company_db(self, company_details: Dict[str, str]):
         progress = QProgressDialog("Creating new company database...", "Cancel", 0, 0, self)
         progress.setWindowModality(Qt.WindowModality.WindowModal); progress.setCancelButton(None)

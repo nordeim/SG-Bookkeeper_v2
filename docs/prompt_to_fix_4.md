@@ -129,3 +129,18 @@ So I need your detailed and thorough review and assessment report on the databas
 ---
 please generate a *complete* updated *replacement* file for `app/services/business_services.py`. I repeat , I want full replacement file without any placeholders that I need to manually edit. Use line by line diff with the previous version of the file to double check and confirm that each change is correct and valid and that no original feautures or functions are accidentally omitted. So do a very careful comparison of the newly generated versus the original to justify and validate the changes.
 
+---
+excellent response! do remember your role and responsibilities! now help to to carefully and deeply review and analyse the following "diff" command output, then give me a report on the real change involved between the original and new (current) version - addition and/or omission. use line by line comparison for your review and analysis.
+
+---
+awesome job so far! now use the same rigorous and meticulous approach to carefully and systematically review the proposed changes to `app/services/business_services.py`, use line by line "diff" to validate the proposed changes, then create a *complete* updated *replacement* file for `app/services/business_services.py`. I don't want placeholders that I need to edit later. I want a *complete* verified and error-free drop-in replacement. Careful not to lose any original feature or function not affected by the changes.
+
+---
+awesome job! now use the same rigorous and meticulous approach as before to help me carefully review and validate the following changes to `app/ui/accounting/chart_of_accounts_widget.py`. then give me the same analysis report as before (for an earlier file).
+
+---
+excellent job! enclosed inside the attached `project_codebase_updated_files_set-new.md` are the recently updated (new or modified) files in the current codebase. also attached are the project related documents, including a listing of all currently existed files in the codebase. Use line by line comparison to carefully review and validate the codebase files shared. 
+
+---
+awesome job! now use the same rigorous and meticulous approach to help me fix the following (new) error. If you need to review and analyze any codebase files in the given list `currect_project_file_structure.txt` shared earlier, but the files have not been provided to you, please let me know. Do not make up the content of any existing files!
+

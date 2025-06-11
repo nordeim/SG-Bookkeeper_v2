@@ -7,17 +7,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy import text # Added text
 
 from app.models.business.purchase_invoice import PurchaseInvoice, PurchaseInvoiceLine
-# REMOVED: from app.models.business.vendor import Vendor # Not directly used, VendorService is
-# REMOVED: from app.models.business.product import Product # Not directly used, ProductService is
-# REMOVED: from app.models.accounting.tax_code import TaxCode # Not directly used, TaxCodeService is
-# REMOVED: from app.models.accounting.journal_entry import JournalEntry # Not directly used, JournalEntryManager is
 from app.models.business.inventory_movement import InventoryMovement 
-
-# REMOVED: from app.services.business_services import PurchaseInvoiceService, VendorService, ProductService, InventoryMovementService
-# REMOVED: from app.services.core_services import SequenceService, ConfigurationService
-# REMOVED: from app.services.tax_service import TaxCodeService
-# REMOVED: from app.services.account_service import AccountService
-# REMOVED: from app.tax.tax_calculator import TaxCalculator
 
 from app.utils.result import Result
 from app.utils.pydantic_models import (
@@ -34,9 +24,10 @@ if TYPE_CHECKING:
     from app.services.tax_service import TaxCodeService
     from app.services.account_service import AccountService
     from app.tax.tax_calculator import TaxCalculator
-    from app.models.business.vendor import Vendor # For type hint
-    from app.models.business.product import Product # For type hint
-    from app.models.accounting.tax_code import TaxCode # For type hint
+    from app.models.business.vendor import Vendor
+    from app.models.business.product import Product
+    from app.models.accounting.tax_code import TaxCode
+    from app.models.accounting.journal_entry import JournalEntry
 
 
 class PurchaseInvoiceManager:
@@ -102,7 +93,7 @@ class PurchaseInvoiceManager:
         
         for i, line_dto in enumerate(dto.lines):
             line_errors_current_line: List[str] = []
-            product: Optional["Product"] = None # Use TYPE_CHECKING import
+            product: Optional["Product"] = None 
             line_description = line_dto.description
             unit_price = line_dto.unit_price
             line_purchase_account_id: Optional[int] = None 
@@ -137,7 +128,7 @@ class PurchaseInvoiceManager:
                 tax_calc_result: TaxCalculationResultData = await self.tax_calculator.calculate_line_tax(amount=line_subtotal_before_tax, tax_code_str=line_dto.tax_code, transaction_type="PurchaseInvoiceLine")
                 line_tax_amount_calc = tax_calc_result.tax_amount; line_tax_account_id = tax_calc_result.tax_account_id
                 if tax_calc_result.tax_account_id is None and line_tax_amount_calc > Decimal(0):
-                    tc_check_orm = await self.tax_code_service.get_tax_code(line_dto.tax_code) # Use TYPE_CHECKING import
+                    tc_check_orm: Optional["TaxCode"] = await self.tax_code_service.get_tax_code(line_dto.tax_code)
                     if not tc_check_orm or not tc_check_orm.is_active: line_errors_current_line.append(f"Tax code '{line_dto.tax_code}' used on line {i+1} is invalid or inactive.")
             
             invoice_subtotal_calc += line_subtotal_before_tax; invoice_total_tax_calc += line_tax_amount_calc
@@ -313,7 +304,7 @@ class PurchaseInvoiceManager:
                 create_je_result = await self.app_core.journal_entry_manager.create_journal_entry(je_dto, session=session)
                 if not create_je_result.is_success or not create_je_result.value: return Result.failure(["Failed to create JE for PI."] + create_je_result.errors)
                 
-                created_je: JournalEntry = create_je_result.value
+                created_je: "JournalEntry" = create_je_result.value
                 post_je_result = await self.app_core.journal_entry_manager.post_journal_entry(created_je.id, user_id, session=session)
                 if not post_je_result.is_success: return Result.failure([f"JE (ID: {created_je.id}) created but failed to post."] + post_je_result.errors)
 
@@ -345,6 +336,15 @@ class PurchaseInvoiceManager:
 
     async def get_invoices_for_listing(self, vendor_id: Optional[int]=None, status:Optional[InvoiceStatusEnum]=None, start_date:Optional[date]=None, end_date:Optional[date]=None, page:int=1, page_size:int=50) -> Result[List[PurchaseInvoiceSummaryData]]:
         try:
-            summaries = await self.purchase_invoice_service.get_all_summary(vendor_id=vendor_id, status=status, start_date=start_date, end_date=end_date, page=page, page_size=page_size)
+            summaries = await self.purchase_invoice_service.get_all_summary(
+                vendor_id=vendor_id, 
+                status_list=[status] if status else None, 
+                start_date=start_date, 
+                end_date=end_date, 
+                page=page, 
+                page_size=page_size
+            )
             return Result.success(summaries)
-        except Exception as e: self.logger.error(f"Error fetching PI listing: {e}", exc_info=True); return Result.failure([f"Failed to retrieve PI list: {str(e)}"])
+        except Exception as e: 
+            self.logger.error(f"Error fetching PI listing: {e}", exc_info=True)
+            return Result.failure([f"Failed to retrieve PI list: {str(e)}"])

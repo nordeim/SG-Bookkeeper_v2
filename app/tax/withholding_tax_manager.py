@@ -1,6 +1,6 @@
 # File: app/tax/withholding_tax_manager.py
 from typing import TYPE_CHECKING, Dict, Any
-from app.models.business.payment import Payment # For type hint
+from app.models.business.payment import Payment
 
 if TYPE_CHECKING:
     from app.core.application_core import ApplicationCore 
@@ -10,8 +10,8 @@ if TYPE_CHECKING:
 class WithholdingTaxManager:
     def __init__(self, app_core: "ApplicationCore"): 
         self.app_core = app_core
-        self.tax_code_service: "TaxCodeService" = app_core.tax_code_service # type: ignore
-        self.journal_service: "JournalService" = app_core.journal_service # type: ignore 
+        self.tax_code_service: "TaxCodeService" = app_core.tax_code_service
+        self.journal_service: "JournalService" = app_core.journal_service
         self.logger = app_core.logger
         self.logger.info("WithholdingTaxManager initialized.")
 
@@ -29,8 +29,6 @@ class WithholdingTaxManager:
         # This manager needs the gross amount before WHT was deducted. The `payment.amount` is the gross.
         gross_payment_amount = payment.amount
         
-        # A full implementation would need to determine the WHT rate from the payment or related invoices/vendor.
-        # For now, this is a conceptual data structure.
         vendor = payment.vendor
         wht_rate = vendor.withholding_tax_rate if vendor.withholding_tax_applicable else None
         
@@ -40,14 +38,6 @@ class WithholdingTaxManager:
         else:
              wht_amount = (gross_payment_amount * wht_rate) / 100
 
-        # Assuming payee details come from the Vendor record
-        payee_details = {
-            "name": vendor.name,
-            "address": f"{vendor.address_line1 or ''}, {vendor.address_line2 or ''}".strip(", "),
-            "tax_ref_no": vendor.uen_no or "N/A", # UEN as tax reference
-        }
-
-        # Payer details would come from Company Settings
         company_settings = await self.app_core.company_settings_service.get_company_settings()
         payer_details = {
             "name": company_settings.company_name if company_settings else "N/A",
@@ -55,9 +45,9 @@ class WithholdingTaxManager:
         }
 
         form_data = {
-            "s45_payee_name": payee_details["name"],
-            "s45_payee_address": payee_details["address"],
-            "s45_payee_tax_ref": payee_details["tax_ref_no"],
+            "s45_payee_name": vendor.name,
+            "s45_payee_address": f"{vendor.address_line1 or ''}, {vendor.address_line2 or ''}".strip(", "),
+            "s45_payee_tax_ref": vendor.uen_no or "N/A",
             "s45_payer_name": payer_details["name"],
             "s45_payer_tax_ref": payer_details["tax_ref_no"],
             "s45_payment_date": payment.payment_date,

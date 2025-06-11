@@ -21,6 +21,19 @@ class SequenceService:
             result = await session.execute(stmt)
             return result.scalars().first()
 
+    async def get_next_sequence(self, sequence_name: str) -> str:
+        """
+        Generates the next number in a sequence by calling the database function.
+        """
+        # This simplifies the Python-side logic significantly, relying on the robust DB function.
+        db_func_call = text("SELECT core.get_next_sequence_value(:seq_name);")
+        async with self.db_manager.session() as session:
+            result = await session.execute(db_func_call, {"seq_name": sequence_name})
+            next_val = result.scalar_one_or_none()
+            if next_val is None:
+                raise RuntimeError(f"Database function get_next_sequence_value failed for sequence '{sequence_name}'.")
+            return str(next_val)
+
     async def save_sequence(self, sequence_obj: Sequence, session: Optional[AsyncSession] = None) -> Sequence:
         async def _save(sess: AsyncSession):
             sess.add(sequence_obj)
