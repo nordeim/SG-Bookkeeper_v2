@@ -30,28 +30,18 @@ if TYPE_CHECKING:
     from app.models.accounting.tax_code import TaxCode
 
 class SalesInvoiceManager:
-    def __init__(self, 
-                 sales_invoice_service: "SalesInvoiceService",
-                 customer_service: "CustomerService",
-                 product_service: "ProductService",
-                 tax_code_service: "TaxCodeService", 
-                 tax_calculator: "TaxCalculator", 
-                 sequence_service: "SequenceService",
-                 account_service: "AccountService", 
-                 configuration_service: "ConfigurationService", 
-                 app_core: "ApplicationCore",
-                 inventory_movement_service: "InventoryMovementService"): 
-        self.sales_invoice_service = sales_invoice_service
-        self.customer_service = customer_service
-        self.product_service = product_service
-        self.tax_code_service = tax_code_service
-        self.tax_calculator = tax_calculator 
-        self.sequence_service = sequence_service 
-        self.account_service = account_service 
-        self.configuration_service = configuration_service 
+    def __init__(self, app_core: "ApplicationCore"): 
         self.app_core = app_core
-        self.logger = app_core.logger
-        self.inventory_movement_service = inventory_movement_service
+        self.sales_invoice_service: "SalesInvoiceService" = self.app_core.sales_invoice_service
+        self.customer_service: "CustomerService" = self.app_core.customer_service
+        self.product_service: "ProductService" = self.app_core.product_service
+        self.tax_code_service: "TaxCodeService" = self.app_core.tax_code_service
+        self.tax_calculator: "TaxCalculator" = self.app_core.tax_calculator
+        self.sequence_service: "SequenceService" = self.app_core.sequence_service
+        self.account_service: "AccountService" = self.app_core.account_service
+        self.configuration_service: "ConfigurationService" = self.app_core.configuration_service
+        self.inventory_movement_service: "InventoryMovementService" = self.app_core.inventory_movement_service
+        self.logger = self.app_core.logger
 
     async def _validate_and_prepare_invoice_data(
         self, 
@@ -254,11 +244,11 @@ class SalesInvoiceManager:
 
             except Exception as e: self.logger.error(f"Error posting SI ID {invoice_id}: {e}", exc_info=True); return Result.failure([f"Unexpected error posting SI: {str(e)}"])
 
-    async def get_invoices_for_listing(self, customer_id: Optional[int]=None, status:Optional[InvoiceStatusEnum]=None, start_date:Optional[date]=None, end_date:Optional[date]=None, page:int=1, page_size:int=50) -> Result[List[SalesInvoiceSummaryData]]:
+    async def get_invoices_for_listing(self, customer_id: Optional[int]=None, status_list:Optional[List[InvoiceStatusEnum]]=None, start_date:Optional[date]=None, end_date:Optional[date]=None, page:int=1, page_size:int=50) -> Result[List[SalesInvoiceSummaryData]]:
         try:
             summaries = await self.sales_invoice_service.get_all_summary(
                 customer_id=customer_id, 
-                status_list=[status] if status else None, 
+                status_list=status_list, 
                 start_date=start_date, 
                 end_date=end_date, 
                 page=page, 
@@ -267,5 +257,4 @@ class SalesInvoiceManager:
             return Result.success(summaries)
         except Exception as e: 
             self.logger.error(f"Error fetching SI listing: {e}", exc_info=True)
-            # Re-raise or handle the TypeError specifically if needed, but for now, the generic catch is fine.
             return Result.failure([f"Failed to retrieve SI list: {str(e)}"])

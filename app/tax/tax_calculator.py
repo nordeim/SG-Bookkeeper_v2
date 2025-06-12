@@ -2,16 +2,17 @@
 from decimal import Decimal
 from typing import List, Optional, Any, TYPE_CHECKING
 
-# REMOVED: from app.services.tax_service import TaxCodeService 
 from app.utils.pydantic_models import TaxCalculationResultData, TransactionTaxData, TransactionLineTaxData
 from app.models.accounting.tax_code import TaxCode as TaxCodeModel
 
 if TYPE_CHECKING:
-    from app.services.tax_service import TaxCodeService # ADDED
+    from app.services.tax_service import TaxCodeService
+    from app.core.application_core import ApplicationCore
 
 class TaxCalculator:
-    def __init__(self, tax_code_service: "TaxCodeService"):
-        self.tax_code_service = tax_code_service
+    def __init__(self, app_core: "ApplicationCore"):
+        self.app_core = app_core
+        self.tax_code_service: "TaxCodeService" = self.app_core.tax_code_service
     
     async def calculate_transaction_taxes(self, transaction_data: TransactionTaxData) -> List[dict]:
         results = []
@@ -41,7 +42,7 @@ class TaxCalculator:
         if not tax_code_str or abs(amount) < Decimal("0.01"):
             return result
         
-        tax_code_info: Optional[TaxCodeModel] = await self.tax_code_service.get_tax_code(tax_code_str) # Use TYPE_CHECKING for TaxCodeModel
+        tax_code_info: Optional[TaxCodeModel] = await self.tax_code_service.get_tax_code(tax_code_str)
         if not tax_code_info:
             return result 
         

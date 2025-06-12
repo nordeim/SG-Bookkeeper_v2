@@ -27,7 +27,6 @@ from .pydantic_models import (
     CSVImportErrorData
 )
 from .result import Result
-from .sequence_generator import SequenceGenerator
 from .validation import is_valid_uen
 
 __all__ = [
@@ -55,5 +54,5 @@ __all__ = [
     "BankReconciliationSummaryData",
     "DashboardKPIData",
     "CSVImportErrorData",
-    "Result", "SequenceGenerator", "is_valid_uen"
+    "Result", "is_valid_uen"
 ]

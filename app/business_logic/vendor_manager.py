@@ -3,29 +3,22 @@ from typing import List, Optional, Dict, Any, TYPE_CHECKING
 from decimal import Decimal
 
 from app.models.business.vendor import Vendor
-# REMOVED: from app.services.business_services import VendorService
-# REMOVED: from app.services.account_service import AccountService
-# REMOVED: from app.services.accounting_services import CurrencyService
 from app.utils.result import Result
 from app.utils.pydantic_models import VendorCreateData, VendorUpdateData, VendorSummaryData
 
 if TYPE_CHECKING:
     from app.core.application_core import ApplicationCore
-    from app.services.business_services import VendorService # ADDED
-    from app.services.account_service import AccountService # ADDED
-    from app.services.accounting_services import CurrencyService # ADDED
+    from app.services.business_services import VendorService
+    from app.services.account_service import AccountService
+    from app.services.accounting_services import CurrencyService
 
 class VendorManager:
-    def __init__(self, 
-                 vendor_service: "VendorService", 
-                 account_service: "AccountService", 
-                 currency_service: "CurrencyService", 
-                 app_core: "ApplicationCore"):
-        self.vendor_service = vendor_service
-        self.account_service = account_service
-        self.currency_service = currency_service
+    def __init__(self, app_core: "ApplicationCore"):
         self.app_core = app_core
-        self.logger = app_core.logger 
+        self.vendor_service: "VendorService" = self.app_core.vendor_service
+        self.account_service: "AccountService" = self.app_core.account_service
+        self.currency_service: "CurrencyService" = self.app_core.currency_service
+        self.logger = self.app_core.logger 
 
     async def get_vendor_for_dialog(self, vendor_id: int) -> Optional[Vendor]:
         """ Fetches a full vendor ORM object for dialog population. """

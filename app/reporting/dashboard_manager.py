@@ -49,7 +49,6 @@ class DashboardManager:
             total_ar_overdue = await self.app_core.customer_service.get_total_overdue_balance(); total_ap_overdue = await self.app_core.vendor_service.get_total_overdue_balance() 
             ar_aging_summary = await self.app_core.customer_service.get_ar_aging_summary(effective_date); ap_aging_summary = await self.app_core.vendor_service.get_ap_aging_summary(effective_date)
 
-            # --- Ratio Calculations ---
             total_current_assets, total_current_liabilities, total_non_current_liabilities, total_inventory, total_equity = (Decimal(0) for _ in range(5))
             all_active_accounts: List[Account] = await self.app_core.account_service.get_all_active()
 
@@ -59,23 +58,23 @@ class DashboardManager:
                     if acc.sub_type in CURRENT_ASSET_SUBTYPES: total_current_assets += balance
                     if acc.sub_type == "Inventory": total_inventory += balance
                 elif acc.account_type == "Liability":
-                    if acc.sub_type in CURRENT_LIABILITY_SUBTYPES: total_current_liabilities += balance
-                    elif acc.sub_type in NON_CURRENT_LIABILITY_SUBTYPES: total_non_current_liabilities += balance
-                elif acc.account_type == "Equity": total_equity += balance
+                    if acc.sub_type in CURRENT_LIABILITY_SUBTYPES: total_current_liabilities -= balance # Liabilities have negative balance
+                    elif acc.sub_type in NON_CURRENT_LIABILITY_SUBTYPES: total_non_current_liabilities -= balance # Liabilities have negative balance
+                elif acc.account_type == "Equity": total_equity -= balance # Equity has negative balance
 
             total_liabilities = total_current_liabilities + total_non_current_liabilities
             
             quick_ratio: Optional[Decimal] = None
             if total_current_liabilities > 0: quick_ratio = ((total_current_assets - total_inventory) / total_current_liabilities).quantize(Decimal("0.01"))
-            elif (total_current_assets - total_inventory) > 0: quick_ratio = Decimal('Infinity')
+            elif (total_current_assets - total_inventory) > 0: quick_ratio = Decimal('inf')
 
             debt_to_equity_ratio: Optional[Decimal] = None
             if total_equity > 0: debt_to_equity_ratio = (total_liabilities / total_equity).quantize(Decimal("0.01"))
-            elif total_liabilities > 0: debt_to_equity_ratio = Decimal('Infinity')
+            elif total_liabilities > 0: debt_to_equity_ratio = Decimal('inf')
 
             current_ratio: Optional[Decimal] = None
             if total_current_liabilities > 0: current_ratio = (total_current_assets / total_current_liabilities).quantize(Decimal("0.01"))
-            elif total_current_assets > 0: current_ratio = Decimal('Infinity')
+            elif total_current_assets > 0: current_ratio = Decimal('inf')
 
             return DashboardKPIData(
                 kpi_period_description=kpi_period_description, base_currency=base_currency,

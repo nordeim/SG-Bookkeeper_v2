@@ -1,26 +1,26 @@
 # File: app/accounting/fiscal_period_manager.py
-from typing import List, Optional, TYPE_CHECKING # Removed Any, will use specific type
+from typing import List, Optional, TYPE_CHECKING
 from datetime import date, datetime, timedelta
 from dateutil.relativedelta import relativedelta # type: ignore
 
-from sqlalchemy import select # Added for explicit select usage
+from sqlalchemy import select 
 
 from app.models.accounting.fiscal_year import FiscalYear 
 from app.models.accounting.fiscal_period import FiscalPeriod
 from app.utils.result import Result
 from app.utils.pydantic_models import FiscalYearCreateData 
-from app.services.fiscal_period_service import FiscalPeriodService
-from app.services.accounting_services import FiscalYearService 
 
 if TYPE_CHECKING:
     from app.core.application_core import ApplicationCore 
-    from sqlalchemy.ext.asyncio import AsyncSession # For session type hint
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from app.services.fiscal_period_service import FiscalPeriodService
+    from app.services.accounting_services import FiscalYearService 
 
 class FiscalPeriodManager:
     def __init__(self, app_core: "ApplicationCore"):
         self.app_core = app_core
-        self.fiscal_period_service: FiscalPeriodService = app_core.fiscal_period_service 
-        self.fiscal_year_service: FiscalYearService = app_core.fiscal_year_service 
+        self.fiscal_period_service: "FiscalPeriodService" = self.app_core.fiscal_period_service 
+        self.fiscal_year_service: "FiscalYearService" = self.app_core.fiscal_year_service 
         
     async def create_fiscal_year_and_periods(self, fy_data: FiscalYearCreateData) -> Result[FiscalYear]:
         if fy_data.start_date >= fy_data.end_date:
@@ -34,7 +34,7 @@ class FiscalPeriodManager:
         if overlapping_fy:
             return Result.failure([f"The proposed date range overlaps with existing fiscal year '{overlapping_fy.year_name}' ({overlapping_fy.start_date} - {overlapping_fy.end_date})."])
 
-        async with self.app_core.db_manager.session() as session: # type: ignore # session is AsyncSession here
+        async with self.app_core.db_manager.session() as session: # type: ignore 
             fy = FiscalYear(
                 year_name=fy_data.year_name, 
                 start_date=fy_data.start_date, 
@@ -48,32 +48,17 @@ class FiscalPeriodManager:
             await session.refresh(fy) 
 
             if fy_data.auto_generate_periods and fy_data.auto_generate_periods in ["Month", "Quarter"]:
-                # Pass the existing session to the internal method
-                period_generation_result = await self._generate_periods_for_year_internal(
-                    fy, fy_data.auto_generate_periods, fy_data.user_id, session # Pass session
-                )
-                if not period_generation_result.is_success:
-                    # No need to explicitly rollback here, 'async with session' handles it on exception.
-                    # If period_generation_result itself raises an exception that's caught outside,
-                    # the session context manager will rollback.
-                    # If it returns a failure Result, we need to raise an exception to trigger rollback
-                    # or handle it such that the fiscal year is not considered fully created.
-                    # For now, let's assume if period generation fails, we raise to rollback.
-                    # This means _generate_periods_for_year_internal should raise on critical failure.
-                    # Or, the manager can decide to keep the FY and return warnings.
-                    # Let's make it so that failure to generate periods makes the whole operation fail.
-                    raise Exception(f"Failed to generate periods for '{fy.year_name}': {', '.join(period_generation_result.errors)}")
+                try:
+                    await self._generate_periods_for_year_internal(
+                        fy, fy_data.auto_generate_periods, fy_data.user_id, session
+                    )
+                except ValueError as e:
+                     raise Exception(f"Failed to generate periods for '{fy.year_name}': {e}") from e
             
-            # If we reach here, commit will happen automatically when 'async with session' exits.
             return Result.success(fy)
         
-        # This return Result.failure is less likely to be hit due to `async with` handling exceptions
-        return Result.failure(["An unexpected error occurred outside the transaction for fiscal year creation."])
-
-
     async def _generate_periods_for_year_internal(self, fiscal_year: FiscalYear, period_type: str, user_id: int, session: "AsyncSession") -> Result[List[FiscalPeriod]]:
         if not fiscal_year or not fiscal_year.id:
-            # This should raise an exception to trigger rollback in the calling method
             raise ValueError("Valid FiscalYear object with an ID must be provided for period generation.")
         
         stmt_existing = select(FiscalPeriod).where(
@@ -83,7 +68,6 @@ class FiscalPeriodManager:
         existing_periods_result = await session.execute(stmt_existing)
         if existing_periods_result.scalars().first():
              raise ValueError(f"{period_type} periods already exist for fiscal year '{fiscal_year.year_name}'.")
-
 
         periods: List[FiscalPeriod] = []
         current_start_date = fiscal_year.start_date
@@ -121,7 +105,7 @@ class FiscalPeriodManager:
             current_start_date = current_end_date + relativedelta(days=1)
             period_number += 1
         
-        await session.flush() # Flush within the session passed by the caller
+        await session.flush()
         for p in periods: 
             await session.refresh(p)
             
@@ -135,7 +119,6 @@ class FiscalPeriodManager:
         
         period.status = 'Closed'
         period.updated_by_user_id = user_id
-        # The service's update method will handle the commit with its own session
         updated_period = await self.fiscal_period_service.update(period) 
         return Result.success(updated_period)
 
@@ -180,11 +163,13 @@ class FiscalPeriodManager:
         if open_periods:
             return Result.failure([f"Cannot close fiscal year '{fy.year_name}'. Following periods are still open: {[p.name for p in open_periods]}"])
         
-        print(f"Performing year-end closing entries for FY '{fy.year_name}' (conceptual)...")
+        # NOTE: A real implementation would create year-end closing journal entries here.
+        # This is a conceptual placeholder for that complex logic.
+        self.app_core.logger.info(f"Performing year-end closing entries for FY '{fy.year_name}' (conceptual)...")
 
         fy.is_closed = True
         fy.closed_date = datetime.utcnow() 
-        fy.closed_by_user_id = user_id
+        fy.closed_by_user_id = user_id # This should be set on the object
         fy.updated_by_user_id = user_id 
         
         try:

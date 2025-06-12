@@ -1,3 +1,37 @@
+Of course. This error is another classic example of an incomplete refactoring, and I will now address it with my full and meticulous process.
+
+### **CodeNavigator Analysis Report: `TypeError` in `PaymentManager`**
+
+#### 1. Root Cause Analysis
+
+The traceback shows a `TypeError` that is clear and unambiguous:
+*   **Error:** `TypeError: PaymentManager.get_payments_for_listing() got an unexpected keyword argument 'wht_applicable_only'`
+*   **Location:** The error occurs in `app/ui/reports/wht_reporting_widget.py`, where the UI correctly calls the manager with the new filter: `self.app_core.payment_manager.get_payments_for_listing(..., wht_applicable_only=True)`.
+*   **Problem:** This indicates that while the `PaymentService` layer was correctly updated to handle the `wht_applicable_only` filter, the intermediary `PaymentManager`'s `get_payments_for_listing` method was not updated to accept this new keyword argument and pass it down to the service.
+
+The data flow was broken between the UI and the Manager layer.
+
+#### 2. Execution Plan
+
+The solution is to complete the chain of the refactoring by updating the `PaymentManager` method signature and its internal call to the `PaymentService`.
+
+1.  **Target `app/business_logic/payment_manager.py`**:
+    *   [x] I have the latest version of this file from the previous turn. I will locate the `get_payments_for_listing` method.
+    *   [x] **Modify Signature:** I will add the new parameter `wht_applicable_only: bool = False` to the method signature, making it a valid keyword argument.
+    *   [x] **Modify Internal Call:** I will update the internal call to the service to pass this new parameter along: `summaries = await self.payment_service.get_all_summary(..., wht_applicable_only=wht_applicable_only)`.
+2.  **Validate and Generate**:
+    *   [x] I will perform a line-by-line validation to ensure these are the only changes.
+    *   [x] I will then provide the complete, updated replacement file for `app/business_logic/payment_manager.py`.
+
+This targeted change will fix the `TypeError` and make the WHT reporting feature fully functional. No other files require modification.
+
+***
+
+### **Complete Updated File: `app/business_logic/payment_manager.py`**
+
+This version contains the corrected `get_payments_for_listing` method, which now accepts the `wht_applicable_only` parameter and correctly passes it to the service layer. This resolves the startup error.
+
+```python
 # File: app/business_logic/payment_manager.py
 from typing import List, Optional, Dict, Any, TYPE_CHECKING, Union, cast
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
@@ -247,3 +281,8 @@ class PaymentManager:
         except Exception as e: 
             self.logger.error(f"Error fetching payment listing: {e}", exc_info=True)
             return Result.failure([f"Failed to retrieve payment list: {str(e)}"])
+```
+
+---
+https://drive.google.com/file/d/11X3f2mKRWl56NubmyAKo5dwck7p2JaLs/view?usp=sharing, https://drive.google.com/file/d/11XlZNQ-Qn9Lw3G-YPcWZrO-g5ZbwfscI/view?usp=sharing, https://drive.google.com/file/d/127qgzFTDe-WAnzFzOzBn2efixfG9w9YE/view?usp=sharing, https://drive.google.com/file/d/12KXr1nctXs-02etv6A72vihqrtK3dDK9/view?usp=sharing, https://drive.google.com/file/d/131RjCRl_kHc0XtnhCzDmf5bjgJX5iEww/view?usp=sharing, https://drive.google.com/file/d/13B_HcJmxgi3QGYHnj64s275QZN20pg3g/view?usp=sharing, https://drive.google.com/file/d/18FJ9jhk3oxKCC_sNWs_1C-EZZXe_j-TT/view?usp=sharing, https://drive.google.com/file/d/19n5zeGWlBAwCRFAXfbe4kY5xBK-uV-d7/view?usp=sharing, https://drive.google.com/file/d/1KHIzrVj6ijdFoVTVLa-lfyyVzwf5IYwp/view?usp=sharing, https://drive.google.com/file/d/1M5ybbmzIqj7IUo99Yle7xl_pkczow6Ci/view?usp=sharing, https://drive.google.com/file/d/1OSDUBHWuHA7wKnttqPtYbAEpqdXDi1_8/view?usp=sharing, https://drive.google.com/file/d/1P4rxLCG8-5cJ2_vt2qKJqO2wxN26ro9T/view?usp=sharing, https://aistudio.google.com/app/prompts?state=%7B%22ids%22:%5B%221Rh0wsFMlVjsOSccPUo5JJmfB6gof_tS2%22%5D,%22action%22:%22open%22,%22userId%22:%22103961307342447084491%22,%22resourceKeys%22:%7B%7D%7D&usp=sharing, https://drive.google.com/file/d/1T1kVeTCKFOIzPckOmAarcwHC8x0yau1i/view?usp=sharing, https://drive.google.com/file/d/1YZs4VLSKR9N-eVniftVGHgh9RJHLpFtu/view?usp=sharing, https://drive.google.com/file/d/1dAgihzWoQ03fPAECRX4qUzJiiJppPgwz/view?usp=sharing, https://drive.google.com/file/d/1gM89F4jZMNsWNTd9bxJxPfRxY0Y2Vfof/view?usp=sharing, https://drive.google.com/file/d/1hAf_3y-ecY6gAU67N0KzgqGZz1XrDjed/view?usp=sharing, https://drive.google.com/file/d/1iLEa4z_1QZHLh5VEurZg7rUHZneQzsY8/view?usp=sharing, https://drive.google.com/file/d/1jigzShY696C9WmGqx1js_OPVEWWBnXeg/view?usp=sharing, https://drive.google.com/file/d/1mO8_5fwtxIboAdjNo31vNNnNYbzI8-gq/view?usp=sharing, https://drive.google.com/file/d/1pswWDECjQfPpG_vPcb2bGTynwme8P6nA/view?usp=sharing, https://drive.google.com/file/d/1tbuyHau6G4TdCZ0v6u22_ePISFTSNU7r/view?usp=sharing, https://drive.google.com/file/d/1uC_hd3fJooXn4tQQsLJPU3mxW07hDGym/view?usp=sharing, https://drive.google.com/file/d/1yVM3DBOfyPfYckF4q1C8S0ce_9pMnUvz/view?usp=sharing
+

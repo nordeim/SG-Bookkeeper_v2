@@ -3,29 +3,22 @@ from typing import List, Optional, Dict, Any, TYPE_CHECKING
 from decimal import Decimal
 
 from app.models.business.customer import Customer
-# REMOVED: from app.services.business_services import CustomerService
-# REMOVED: from app.services.account_service import AccountService 
-# REMOVED: from app.services.accounting_services import CurrencyService 
 from app.utils.result import Result
 from app.utils.pydantic_models import CustomerCreateData, CustomerUpdateData, CustomerSummaryData
 
 if TYPE_CHECKING:
     from app.core.application_core import ApplicationCore
-    from app.services.business_services import CustomerService # ADDED
-    from app.services.account_service import AccountService # ADDED
-    from app.services.accounting_services import CurrencyService # ADDED
+    from app.services.business_services import CustomerService
+    from app.services.account_service import AccountService 
+    from app.services.accounting_services import CurrencyService 
 
 class CustomerManager:
-    def __init__(self, 
-                 customer_service: "CustomerService", 
-                 account_service: "AccountService", 
-                 currency_service: "CurrencyService", 
-                 app_core: "ApplicationCore"):
-        self.customer_service = customer_service
-        self.account_service = account_service
-        self.currency_service = currency_service
+    def __init__(self, app_core: "ApplicationCore"):
         self.app_core = app_core
-        self.logger = app_core.logger
+        self.customer_service: "CustomerService" = self.app_core.customer_service
+        self.account_service: "AccountService" = self.app_core.account_service
+        self.currency_service: "CurrencyService" = self.app_core.currency_service
+        self.logger = self.app_core.logger
 
     async def get_customer_for_dialog(self, customer_id: int) -> Optional[Customer]:
         """ Fetches a full customer ORM object for dialog population. """

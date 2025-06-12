@@ -3,30 +3,23 @@ from typing import List, Optional, Dict, Any, TYPE_CHECKING
 from decimal import Decimal
 
 from app.models.business.product import Product
-# REMOVED: from app.services.business_services import ProductService
-# REMOVED: from app.services.account_service import AccountService
-# REMOVED: from app.services.tax_service import TaxCodeService 
 from app.utils.result import Result
 from app.utils.pydantic_models import ProductCreateData, ProductUpdateData, ProductSummaryData
 from app.common.enums import ProductTypeEnum 
 
 if TYPE_CHECKING:
     from app.core.application_core import ApplicationCore
-    from app.services.business_services import ProductService # ADDED
-    from app.services.account_service import AccountService # ADDED
-    from app.services.tax_service import TaxCodeService # ADDED
+    from app.services.business_services import ProductService
+    from app.services.account_service import AccountService
+    from app.services.tax_service import TaxCodeService
 
 class ProductManager:
-    def __init__(self, 
-                 product_service: "ProductService", 
-                 account_service: "AccountService", 
-                 tax_code_service: "TaxCodeService",
-                 app_core: "ApplicationCore"):
-        self.product_service = product_service
-        self.account_service = account_service
-        self.tax_code_service = tax_code_service
+    def __init__(self, app_core: "ApplicationCore"):
         self.app_core = app_core
-        self.logger = app_core.logger 
+        self.product_service: "ProductService" = self.app_core.product_service
+        self.account_service: "AccountService" = self.app_core.account_service
+        self.tax_code_service: "TaxCodeService" = self.app_core.tax_code_service
+        self.logger = self.app_core.logger 
 
     async def get_product_for_dialog(self, product_id: int) -> Optional[Product]:
         """ Fetches a full product/service ORM object for dialog population. """

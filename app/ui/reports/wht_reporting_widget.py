@@ -10,7 +10,7 @@ from typing import Optional, TYPE_CHECKING
 from app.core.application_core import ApplicationCore
 from app.main import schedule_task_from_qt
 from app.utils.result import Result
-from app.common.enums import PaymentTypeEnum, PaymentEntityTypeEnum
+from app.common.enums import PaymentTypeEnum
 from app.ui.reports.wht_payment_table_model import WHTPaymentTableModel
 from app.models.accounting.withholding_tax_certificate import WithholdingTaxCertificate
 from app.models.business.payment import Payment
@@ -30,7 +30,7 @@ class WHTReportingWidget(QWidget):
         
         controls_group = QGroupBox("Withholding Tax Payments")
         controls_layout = QHBoxLayout(controls_group)
-        controls_layout.addWidget(QLabel("This lists all vendor payments where Withholding Tax was applicable."))
+        controls_layout.addWidget(QLabel("This lists vendor payments where Withholding Tax was applicable."))
         controls_layout.addStretch()
         self.refresh_button = QPushButton(QIcon(":/icons/refresh.svg"), "Refresh List")
         controls_layout.addWidget(self.refresh_button)
@@ -73,11 +73,11 @@ class WHTReportingWidget(QWidget):
         
         self.refresh_button.setEnabled(False)
         self.generate_cert_button.setEnabled(False)
-        # We need a way to filter payments where WHT was applied. For now, we list all vendor payments.
-        # A future enhancement would be a flag on the Payment model or a lookup via WHT certificates.
+
         future = schedule_task_from_qt(self.app_core.payment_manager.get_payments_for_listing(
-            entity_type=PaymentEntityTypeEnum.VENDOR,
-            page_size=-1 # Get all
+            entity_type=PaymentTypeEnum.VENDOR_PAYMENT,
+            page_size=-1,
+            wht_applicable_only=True # Use the new service parameter
         ))
         if future:
             future.add_done_callback(self._handle_load_payments_result)
@@ -114,8 +114,10 @@ class WHTReportingWidget(QWidget):
             future.add_done_callback(self._handle_generate_cert_result)
 
     async def _fetch_payment_and_generate_cert(self, payment_id: int):
-        # We need the full Payment ORM object with its vendor relationship loaded.
-        payment_orm = await self.app_core.payment_manager.payment_service.get_payment_with_vendor(payment_id)
+        if not self.app_core.current_user:
+            return Result.failure(["No user is logged in."])
+            
+        payment_orm = await self.app_core.payment_service.get_payment_with_vendor(payment_id)
         if not payment_orm:
             return Result.failure([f"Payment with ID {payment_id} not found or vendor details could not be loaded."])
         

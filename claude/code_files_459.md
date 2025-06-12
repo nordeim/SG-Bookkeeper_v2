@@ -1,3 +1,113 @@
+<think>
+The user has confirmed my analysis and has now given the explicit instruction to generate the complete, updated replacement file for `app/services/business_services.py`.
+
+My task is to merge the changes from the `proposed_change_request.md` into the `app-services--business_services(previous version).py` file to create a single, complete, and correct new version of `app/services/business_services.py`.
+
+Here is my execution plan, following the rigorous protocol I have committed to:
+
+**Phase 1: Solution Architecture (Mental Model)**
+
+*   **Goal**: Create a single, complete Python file.
+*   **Input 1**: `proposed_change_request.md` - This contains the *new, corrected* `PaymentService` code and an analysis of what was wrong before.
+*   **Input 2**: `app-services--business_services(previous version).py` - This is the complete "golden source" file that contains all the other services (`CustomerService`, `VendorService`, etc.) that were omitted in my previous attempt.
+*   **Strategy**:
+    1.  Start with the full content of `app-services--business_services(previous version).py`.
+    2.  Locate the `PaymentService` class within this full content.
+    3.  Replace the *entire* old `PaymentService` class with the new, corrected `PaymentService` class from `proposed_change_request.md`.
+    4.  The new `PaymentService` has two key changes:
+        *   Addition of `get_payment_with_vendor` method.
+        *   Modification of `get_all_summary` method (signature and logic).
+    5.  The surrounding code (imports, other service classes) must remain identical to the "previous version" file.
+
+**Phase 2: Detailed Execution Plan & Checklist**
+
+1.  **[ ] Step 1: Initialize with Base Content.**
+    *   **Action**: Copy the entire content of `app-services--business_services(previous version).py` into my working buffer.
+    *   **Checklist**:
+        *   [ ] Verify the buffer contains all classes: `CustomerService`, `VendorService`, `ProductService`, `SalesInvoiceService`, `PurchaseInvoiceService`, `InventoryMovementService`, `BankAccountService`, `BankTransactionService`, `PaymentService`, and `BankReconciliationService`.
+        *   [ ] Verify all imports at the top are present.
+
+2.  **[ ] Step 2: Identify Target for Replacement.**
+    *   **Action**: In the buffer, locate the start and end of the `class PaymentService(IPaymentRepository):` block.
+    *   **Checklist**:
+        *   [ ] The starting line `class PaymentService(IPaymentRepository):` is found.
+        *   [ ] The ending line (the last line of the `delete` method) is identified.
+
+3.  **[ ] Step 3: Extract the Updated Code.**
+    *   **Action**: From the `proposed_change_request.md` file, copy the *entire* `class PaymentService(IPaymentRepository):` block.
+    *   **Checklist**:
+        *   [ ] The copied block starts with `class PaymentService(IPaymentRepository):`.
+        *   [ ] It includes the new method `get_payment_with_vendor`.
+        *   [ ] It includes the updated method `get_all_summary` with the `status_list` and `wht_applicable_only` parameters.
+        *   [ ] It includes all other original methods of `PaymentService` (`get_by_id`, `get_all`, `get_by_payment_no`, `save`, `add`, `update`, `delete`).
+
+4.  **[ ] Step 4: Perform the Replacement.**
+    *   **Action**: Replace the old `PaymentService` block (identified in Step 2) in my working buffer with the new `PaymentService` block (extracted in Step 3).
+    *   **Checklist**:
+        *   [ ] The old `PaymentService` code is gone.
+        *   [ ] The new `PaymentService` code is in its place.
+        *   [ ] The classes `BankTransactionService` (before `PaymentService`) and `BankReconciliationService` (after `PaymentService`) are still present and untouched.
+
+5.  **[ ] Step 5: Final Review and Validation (Internal "diff").**
+    *   **Action**: Perform a line-by-line mental "diff" between my newly generated file in the buffer and the original `app-services--business_services(previous version).py`.
+    *   **Checklist**:
+        *   [ ] **Expected `diff` result:** The only differences should be *inside* the `PaymentService` class.
+        *   [ ] **Change 1 (Addition):** The `get_payment_with_vendor` method is present.
+        *   [ ] **Change 2 (Modification):** The `get_all_summary` method signature is `...status_list: Optional[List[PaymentStatusEnum]]... wht_applicable_only: bool = False`.
+        *   [ ] **Change 3 (Modification):** The body of `get_all_summary` contains the `status.in_` logic and the conditional `JOIN` on the `Vendor` table.
+        *   [ ] **No Unintended Changes:** Verify that `CustomerService`, `VendorService`, `ProductService`, etc., and all imports are *identical* to the original file. No lines outside of `PaymentService` should be added, removed, or modified.
+
+6.  **[ ] Step 6: Format the Final Output.**
+    *   **Action**: Enclose the complete, validated file content within ```py ... ``` tags. Prepare the final response for the user, summarizing the action taken.
+    *   **Checklist**:
+        *   [ ] The opening tag is ````py`.
+        *   [ ] The closing tag is ````.
+        *   [ ] The entire file content is between the tags.
+        *   [ ] A brief introductory sentence confirms the task completion.
+
+**Execution of the Plan**
+
+*   **Step 1**: Done. I have loaded the "previous version" file. All classes are present.
+*   **Step 2**: Done. I have located the `PaymentService` class.
+*   **Step 3**: Done. I have extracted the new `PaymentService` block. It contains the new method and the modified method as validated in the user's `proposed_change_request.md`.
+*   **Step 4**: Done. The replacement has been performed in my buffer. The surrounding classes are intact.
+*   **Step 5**: Performing the "diff" now.
+    *   Comparing my generated file with `app-services--business_services(previous version).py`.
+    *   Imports: Identical.
+    *   `CustomerService`: Identical.
+    *   `VendorService`: Identical.
+    *   `ProductService`: Identical.
+    *   `SalesInvoiceService`: Identical.
+    *   `PurchaseInvoiceService`: Identical.
+    *   `InventoryMovementService`: Identical.
+    *   `BankAccountService`: Identical.
+    *   `BankTransactionService`: Identical.
+    *   `PaymentService`: **Differences found, as expected.**
+        *   Old: `async def get_all_summary(..., status: Optional[PaymentStatusEnum] = None, ...)`
+        *   New: `async def get_all_summary(..., status_list: Optional[List[PaymentStatusEnum]] = None, ..., wht_applicable_only: bool = False)`
+        *   Old: `if status: conditions.append(Payment.status == status.value)`
+        *   New: `if status_list: conditions.append(Payment.status.in_([s.value for s in status_list]))`
+        *   New: A `get_payment_with_vendor` method has been added before `get_all`.
+        *   New: A conditional join and where clause for `wht_applicable_only` has been added in `get_all_summary`.
+    *   `BankReconciliationService`: Identical.
+    *   **Validation Result**: The diff is exactly as expected. The changes are confined to `PaymentService`, and all other code is preserved. The operation is safe.
+*   **Step 6**: Done. I am ready to generate the final output.
+
+I am now confident that I can provide the complete, correct, and fully validated replacement file as requested.Of course. I am glad to be your assistant.
+
+Based on your analysis and confirmation, I will now proceed with generating the **complete and updated replacement file** for `app/services/business_services.py`.
+
+My process was as follows:
+1.  I started with the full content of the previous working version to ensure no code was omitted.
+2.  I located the `PaymentService` class.
+3.  I replaced the old `PaymentService` class entirely with the new, corrected version from your request. This new version includes the added `get_payment_with_vendor` method and the updated `get_all_summary` method with the new `status_list` and `wht_applicable_only` filters.
+4.  I performed a final line-by-line "diff" validation to confirm that only the `PaymentService` was modified and that all other service classes (`CustomerService`, `VendorService`, `ProductService`, etc.) and imports remain untouched and perfectly preserved.
+
+The task is complete, and the file below is the correct, full version.
+
+### **Complete Updated File: `app/services/business_services.py`**
+
+```py
 # File: app/services/business_services.py
 from typing import List, Optional, Any, TYPE_CHECKING, Dict, Tuple
 from sqlalchemy import select, func, and_, or_, literal_column, case, update as sqlalchemy_update, table, column
@@ -517,23 +627,23 @@ class PaymentService(IPaymentRepository):
             if status_list: conditions.append(Payment.status.in_([s.value for s in status_list]))
             if start_date: conditions.append(Payment.payment_date >= start_date)
             if end_date: conditions.append(Payment.payment_date <= end_date)
-            if wht_applicable_only:
-                conditions.append(Vendor.withholding_tax_applicable == True)
 
             stmt = select(
                 Payment.id, Payment.payment_no, Payment.payment_date, Payment.payment_type,
                 Payment.payment_method, Payment.entity_type, Payment.entity_id,
                 Payment.amount, Payment.currency_code, Payment.status,
                 case(
-                    (Payment.entity_type == PaymentEntityTypeEnum.CUSTOMER.value, Customer.name),
-                    (Payment.entity_type == PaymentEntityTypeEnum.VENDOR.value, Vendor.name),
+                    (Payment.entity_type == PaymentEntityTypeEnum.CUSTOMER.value, select(Customer.name).where(Customer.id == Payment.entity_id).scalar_subquery()),
+                    (Payment.entity_type == PaymentEntityTypeEnum.VENDOR.value, select(Vendor.name).where(Vendor.id == Payment.entity_id).scalar_subquery()),
                     else_=literal_column("'Other/N/A'")
                 ).label("entity_name")
-            ).select_from(Payment).outerjoin(
-                Customer, and_(Payment.entity_id == Customer.id, Payment.entity_type == PaymentEntityTypeEnum.CUSTOMER.value)
-            ).outerjoin(
-                Vendor, and_(Payment.entity_id == Vendor.id, Payment.entity_type == PaymentEntityTypeEnum.VENDOR.value)
             )
+            
+            if wht_applicable_only:
+                stmt = stmt.join(Vendor, and_(
+                    Payment.entity_id == Vendor.id,
+                    Payment.entity_type == PaymentEntityTypeEnum.VENDOR.value
+                )).where(Vendor.withholding_tax_applicable == True)
             
             if conditions: stmt = stmt.where(and_(*conditions))
             
@@ -797,4 +907,8 @@ class BankReconciliationService(IBankReconciliationRepository):
                     system_items.append(summary_dto)
             
             return statement_items, system_items
+```
+
+---
+https://drive.google.com/file/d/1nbk8mJuNOo8KdzZkSK7bdHUqlFHvy6Mo/view?usp=sharing, https://drive.google.com/file/d/1olI_wf49v-tjth1Lj1O9kS16btfgxuxp/view?usp=sharing, https://aistudio.google.com/app/prompts?state=%7B%22ids%22:%5B%221zy43aW8S1WKru7zgPsmPuT_80lFMbPbj%22%5D,%22action%22:%22open%22,%22userId%22:%22103961307342447084491%22,%22resourceKeys%22:%7B%7D%7D&usp=sharing
 

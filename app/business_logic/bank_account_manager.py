@@ -3,9 +3,6 @@ from typing import List, Optional, Dict, Any, TYPE_CHECKING, Union
 from decimal import Decimal
 
 from app.models.business.bank_account import BankAccount
-# REMOVED: from app.services.business_services import BankAccountService
-# REMOVED: from app.services.account_service import AccountService
-# REMOVED: from app.services.accounting_services import CurrencyService
 from app.utils.result import Result
 from app.utils.pydantic_models import (
     BankAccountCreateData, BankAccountUpdateData, BankAccountSummaryData
@@ -13,22 +10,18 @@ from app.utils.pydantic_models import (
 
 if TYPE_CHECKING:
     from app.core.application_core import ApplicationCore
-    from app.services.business_services import BankAccountService # ADDED
-    from app.services.account_service import AccountService # ADDED
-    from app.services.accounting_services import CurrencyService # ADDED
+    from app.services.business_services import BankAccountService
+    from app.services.account_service import AccountService
+    from app.services.accounting_services import CurrencyService
 
 
 class BankAccountManager:
-    def __init__(self,
-                 bank_account_service: "BankAccountService",
-                 account_service: "AccountService",
-                 currency_service: "CurrencyService",
-                 app_core: "ApplicationCore"):
-        self.bank_account_service = bank_account_service
-        self.account_service = account_service
-        self.currency_service = currency_service
+    def __init__(self, app_core: "ApplicationCore"):
         self.app_core = app_core
-        self.logger = app_core.logger
+        self.bank_account_service: "BankAccountService" = self.app_core.bank_account_service
+        self.account_service: "AccountService" = self.app_core.account_service
+        self.currency_service: "CurrencyService" = self.app_core.currency_service
+        self.logger = self.app_core.logger
 
     async def get_bank_account_for_dialog(self, bank_account_id: int) -> Optional[BankAccount]:
         try:

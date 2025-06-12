@@ -22,17 +22,14 @@ if TYPE_CHECKING:
     from app.services.fiscal_period_service import FiscalPeriodService
 
 class JournalEntryManager:
-    def __init__(self, 
-                 journal_service: "JournalService", 
-                 account_service: "AccountService",
-                 fiscal_period_service: "FiscalPeriodService",
-                 app_core: "ApplicationCore"):
-        self.journal_service = journal_service
-        self.account_service = account_service
-        self.fiscal_period_service = fiscal_period_service
+    def __init__(self, app_core: "ApplicationCore"):
         self.app_core = app_core
+        self.journal_service: "JournalService" = app_core.journal_service
+        self.account_service: "AccountService" = app_core.account_service
+        self.fiscal_period_service: "FiscalPeriodService" = app_core.fiscal_period_service
         self.logger = app_core.logger
 
+    # ... (All other methods like create_journal_entry, post_journal_entry, etc. remain unchanged) ...
     async def create_journal_entry(self, entry_data: JournalEntryData, session: Optional[AsyncSession] = None) -> Result[JournalEntry]:
         async def _create_je_logic(current_session: AsyncSession):
             fiscal_period_stmt = select(FiscalPeriod).where(FiscalPeriod.start_date <= entry_data.entry_date, FiscalPeriod.end_date >= entry_data.entry_date, FiscalPeriod.status == 'Open')

@@ -1,3 +1,53 @@
+<think>
+The user has confirmed my analysis of `financial_statement_generator.py` and wants me to proceed with generating the complete, updated file.
+
+**1. Deconstruct the Request:**
+*   **Task:** Generate a complete, updated replacement file for `app/reporting/financial_statement_generator.py`.
+*   **Input:** The `diff` from the previous turn and the `financial_statement_generator.py` file from `project_codebase_files_set-2.md`.
+*   **Constraint:** Ensure all original report generation methods are included and correctly updated to use the new `app_core` dependency pattern.
+
+**2. Plan the File Generation:**
+1.  **Start with a complete baseline:** I will use the `financial_statement_generator.py` file from the user-provided `project_codebase_files_set-2.md` as the complete source of the original methods.
+2.  **Apply the refactoring to `__init__`:**
+    *   Change the signature to `def __init__(self, app_core: "ApplicationCore"):`.
+    *   The body will only contain `self.app_core = app_core` and `self._account_type_map_cache = None`.
+3.  **Apply the refactoring to all other methods:**
+    *   I will go through every method in the original file (`_get_account_type_map`, `_calculate_account_balances_for_report`, `generate_balance_sheet`, `generate_profit_loss`, etc.).
+    *   In each method, I will find every call to a service, like `self.account_service...` or `self.journal_service...`.
+    *   I will replace each call with the new pattern: `self.app_core.account_service...` or `self.app_core.journal_service...`.
+    *   This needs to be done systematically for every service call in every method.
+    *   List of services to find/replace calls for:
+        *   `self.account_service`
+        *   `self.journal_service`
+        *   `self.fiscal_period_service`
+        *   `self.account_type_service`
+        *   `self.tax_code_service`
+        *   `self.company_settings_service`
+        *   `self.dimension_service`
+        *   `self.configuration_service`
+4.  **Assemble the final file:** I will construct the new file with the refactored `__init__` and all the original methods, now updated with the correct `self.app_core.*` calls.
+5.  **Final Validation:** Before presenting the file, I will do a final read-through to ensure all service calls have been updated and that no logic was accidentally altered. The structure of the generation methods (`generate_balance_sheet`, etc.) should remain identical, only the way they access their dependencies should change.
+
+**Example Change (Mental Check):**
+*   **Original `generate_balance_sheet`:**
+    ```python
+    async def generate_balance_sheet(...):
+        accounts = await self.account_service.get_all_active()
+        # ...
+    ```
+*   **New `generate_balance_sheet`:**
+    ```python
+    async def generate_balance_sheet(...):
+        accounts = await self.app_core.account_service.get_all_active()
+        # ...
+    ```
+This transformation is straightforward and needs to be applied consistently. The plan is solid. I will now generate the complete file.Of course. Based on my validated analysis and your confirmation, I will now generate the complete, updated replacement file for `app/reporting/financial_statement_generator.py`.
+
+This new version incorporates the superior architectural pattern of using the `app_core` as a central service locator, which simplifies the code and improves maintainability. All original report generation methods have been preserved and updated to use this new pattern.
+
+### **Complete Updated File: `app/reporting/financial_statement_generator.py`**
+
+```python
 # File: app/reporting/financial_statement_generator.py
 from typing import List, Dict, Any, Optional, TYPE_CHECKING
 from datetime import date, timedelta 
@@ -197,3 +247,5 @@ class FinancialStatementGenerator:
             "opening_balance": opening_balance, "transactions": transactions_data,
             "closing_balance": closing_balance
         }
+```
+

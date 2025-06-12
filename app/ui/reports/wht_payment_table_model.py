@@ -40,16 +40,14 @@ class WHTPaymentTableModel(QAbstractTableModel):
             if col == 3: return payment.entity_name
             if col == 4: return f"{payment.amount:,.2f}"
             if col == 5: return payment.currency_code
-            # This is a conceptual column. The data source should already be filtered.
-            # In a more advanced version, this could check a flag on the DTO.
-            if col == 6: return "Yes"
+            if col == 6: return "Yes" # This view only shows applicable payments
         
         elif role == Qt.ItemDataRole.TextAlignmentRole:
             if col == 4: # Amount
                 return Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         
         elif role == Qt.ItemDataRole.UserRole:
-            return payment # Return the whole DTO for easy access in the view
+            return payment
 
         return None
 

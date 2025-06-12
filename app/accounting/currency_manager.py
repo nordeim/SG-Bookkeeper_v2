@@ -1,7 +1,4 @@
 # File: app/accounting/currency_manager.py
-# (Content as previously generated, verified - needs TYPE_CHECKING for ApplicationCore)
-# from app.core.application_core import ApplicationCore # Removed direct import
-from app.services.accounting_services import CurrencyService, ExchangeRateService 
 from typing import Optional, List, Any, TYPE_CHECKING
 from datetime import date
 from decimal import Decimal
@@ -10,14 +7,14 @@ from app.models.accounting.exchange_rate import ExchangeRate
 from app.utils.result import Result
 
 if TYPE_CHECKING:
-    from app.core.application_core import ApplicationCore # For type hinting
+    from app.core.application_core import ApplicationCore 
+    from app.services.accounting_services import CurrencyService, ExchangeRateService 
 
 class CurrencyManager:
     def __init__(self, app_core: "ApplicationCore"): 
         self.app_core = app_core
-        # Assuming these service properties exist on app_core and are correctly typed there
-        self.currency_service: CurrencyService = app_core.currency_repo_service # type: ignore 
-        self.exchange_rate_service: ExchangeRateService = app_core.exchange_rate_service # type: ignore
+        self.currency_service: "CurrencyService" = self.app_core.currency_repo_service
+        self.exchange_rate_service: "ExchangeRateService" = self.app_core.exchange_rate_service
     
     async def get_active_currencies(self) -> List[Currency]:
         return await self.currency_service.get_all_active()

@@ -4,7 +4,7 @@ from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from datetime import date
 
 from sqlalchemy.orm import selectinload 
-from sqlalchemy import text # Added text
+from sqlalchemy import text
 
 from app.models.business.purchase_invoice import PurchaseInvoice, PurchaseInvoiceLine
 from app.models.business.inventory_movement import InventoryMovement 
@@ -31,28 +31,18 @@ if TYPE_CHECKING:
 
 
 class PurchaseInvoiceManager:
-    def __init__(self,
-                 purchase_invoice_service: "PurchaseInvoiceService",
-                 vendor_service: "VendorService",
-                 product_service: "ProductService",
-                 tax_code_service: "TaxCodeService",
-                 tax_calculator: "TaxCalculator",
-                 sequence_service: "SequenceService", 
-                 account_service: "AccountService",
-                 configuration_service: "ConfigurationService",
-                 app_core: "ApplicationCore",
-                 inventory_movement_service: "InventoryMovementService"): 
-        self.purchase_invoice_service = purchase_invoice_service
-        self.vendor_service = vendor_service
-        self.product_service = product_service
-        self.tax_code_service = tax_code_service
-        self.tax_calculator = tax_calculator
-        self.sequence_service = sequence_service 
-        self.account_service = account_service
-        self.configuration_service = configuration_service
+    def __init__(self, app_core: "ApplicationCore"): 
         self.app_core = app_core
-        self.logger = app_core.logger
-        self.inventory_movement_service = inventory_movement_service
+        self.purchase_invoice_service: "PurchaseInvoiceService" = self.app_core.purchase_invoice_service
+        self.vendor_service: "VendorService" = self.app_core.vendor_service
+        self.product_service: "ProductService" = self.app_core.product_service
+        self.tax_code_service: "TaxCodeService" = self.app_core.tax_code_service
+        self.tax_calculator: "TaxCalculator" = self.app_core.tax_calculator
+        self.sequence_service: "SequenceService" = self.app_core.sequence_service
+        self.account_service: "AccountService" = self.app_core.account_service
+        self.configuration_service: "ConfigurationService" = self.app_core.configuration_service
+        self.inventory_movement_service: "InventoryMovementService" = self.app_core.inventory_movement_service
+        self.logger = self.app_core.logger
         
     async def _validate_and_prepare_pi_data(
         self, 
@@ -334,11 +324,11 @@ class PurchaseInvoiceManager:
         try: return await self.purchase_invoice_service.get_by_id(invoice_id)
         except Exception as e: self.logger.error(f"Error fetching PI ID {invoice_id} for dialog: {e}", exc_info=True); return None
 
-    async def get_invoices_for_listing(self, vendor_id: Optional[int]=None, status:Optional[InvoiceStatusEnum]=None, start_date:Optional[date]=None, end_date:Optional[date]=None, page:int=1, page_size:int=50) -> Result[List[PurchaseInvoiceSummaryData]]:
+    async def get_invoices_for_listing(self, vendor_id: Optional[int]=None, status_list:Optional[List[InvoiceStatusEnum]]=None, start_date:Optional[date]=None, end_date:Optional[date]=None, page:int=1, page_size:int=50) -> Result[List[PurchaseInvoiceSummaryData]]:
         try:
             summaries = await self.purchase_invoice_service.get_all_summary(
                 vendor_id=vendor_id, 
-                status_list=[status] if status else None, 
+                status_list=status_list, 
                 start_date=start_date, 
                 end_date=end_date, 
                 page=page, 
