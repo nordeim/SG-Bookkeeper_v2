@@ -11,18 +11,21 @@ This Technical Design Specification (TDS) document, version **17.0**, provides a
 This version specifically details major new features and enhancements:
 *   **Multi-Currency Accounting**: Full implementation of foreign currency transaction handling, including the calculation and automated posting of realized foreign exchange gains and losses at the time of payment.
 *   **Withholding Tax (WHT) Management**: A complete workflow for applying WHT on vendor payments, including automated liability tracking through the journal.
+*   **Unrealized Forex Revaluation**: A period-end procedure to calculate and post reversing journal entries for unrealized gains/losses on open foreign currency balances.
 *   **Cash Flow Statement Reporting**: A new, comprehensive Statement of Cash Flows generated using the indirect method, supported by a new account-tagging system.
+*   **Enhanced User Experience**: Introduction of a `QWizard` for a more intuitive "New Company" creation process.
 
-These features build upon the previously implemented multi-company architecture, advanced bank reconciliation module, and interactive KPI dashboard.
+This document serves as a comprehensive guide for ongoing development, feature enhancement, testing, and maintenance, ensuring architectural integrity is preserved as the application evolves.
 
 ### 1.2 Scope
 This TDS covers the following aspects of the SG Bookkeeper application:
--   **System Architecture**: The layered architecture and its support for advanced accounting workflows like multi-currency and WHT.
--   **Database Schema**: Details and organization as defined in `scripts/schema.sql` (v1.0.7), including the new `cash_flow_category` field in the `accounts` table and new system accounts.
--   **Key UI Implementation Patterns**: Changes to the `PaymentDialog` and `AccountDialog` to support the new features.
--   **Core Business Logic**: Detailed explanation of the logic within `PaymentManager` for handling Forex and WHT, and the new `FinancialStatementGenerator` logic for the Cash Flow Statement.
--   **Data Models & DTOs**: Structure and purpose of updated ORM models and Pydantic DTOs.
--   **Security Implementation**: Authentication, Role-Based Access Control (RBAC), and audit mechanisms.
+-   System Architecture: The layered architecture, asynchronous processing model, and core design patterns.
+-   Database Schema: Details and organization as defined in `scripts/schema.sql` (v1.0.7), including tables, views, custom functions, and triggers.
+-   Key UI Implementation Patterns: `PySide6` interactions with the asynchronous backend, DTO usage, and the structure of key UI components like `MainWindow`, module widgets, and dialogs.
+-   Core Business Logic: Component structures and interactions for all implemented modules, with a deep dive into the new `ForexManager` and the enhanced `PaymentManager`.
+-   Data Models (SQLAlchemy ORM) and Data Transfer Objects (Pydantic DTOs).
+-   Security Implementation: Authentication, Role-Based Access Control (RBAC), and comprehensive audit mechanisms.
+-   Deployment and Initialization procedures.
 
 ### 1.3 Intended Audience
 -   **Software Developers**: For implementation, feature development, and understanding system design.
@@ -31,159 +34,186 @@ This TDS covers the following aspects of the SG Bookkeeper application:
 -   **Technical Project Managers**: For project oversight, planning, and resource allocation.
 
 ### 1.4 System Overview
-SG Bookkeeper is a cross-platform desktop application engineered with Python, utilizing PySide6 for its GUI and PostgreSQL for robust data storage. Its multi-company architecture allows users to manage multiple businesses, each with its data securely isolated in a dedicated database.
+SG Bookkeeper is a cross-platform desktop application engineered with Python, utilizing PySide6 for its GUI and PostgreSQL for robust data storage. It is designed to provide comprehensive accounting solutions for Singaporean Small to Medium-sized Businesses (SMBs). Key features include a full double-entry bookkeeping system, Singapore-specific GST management, interactive financial reporting, modules for managing essential business operations (Customers, Vendors, Invoicing, Payments), and a full bank reconciliation module.
 
-The application provides a full double-entry accounting core, Singapore-specific GST and Withholding Tax management, and a suite of interactive financial reports, including a Statement of Cash Flows. Core business operations (Customers, Vendors, Invoicing, Payments) are fully supported with multi-currency capabilities, including the automatic calculation of realized foreign exchange gains and losses. The application's focus on user experience is evident in its interactive dashboard with graphical KPIs and its advanced bank reconciliation module with draft persistence and visual matching aids.
+The system is built on a multi-company architecture, where each company's data is securely isolated in its own dedicated PostgreSQL database. It natively handles multi-currency transactions, automatically calculating both realized and unrealized foreign exchange gains and losses. It also integrates Singapore-specific Withholding Tax (WHT) management directly into the payment workflow. The focus on user experience is evident in its interactive dashboard, a wizard-based company setup, and visual reconciliation aids. The application emphasizes data integrity, compliance with local accounting standards, user-friendliness, and robust auditability through a comprehensive, trigger-based audit logging system.
 
 ### 1.5 Current Implementation Status
-As of version 17.0 (reflecting schema v1.0.7):
-*   **Multi-Currency Support**: Fully implemented. The system now correctly calculates and posts realized foreign exchange gains or losses when foreign currency invoices are settled on a date with a different exchange rate.
-*   **Withholding Tax Management**: Fully implemented. The `PaymentDialog` now supports the application of WHT for applicable vendors, automatically creating the correct JE to debit A/P and credit both the bank and the WHT Payable liability account.
-*   **Cash Flow Statement**: Implemented. A new report generates a Statement of Cash Flows using the indirect method. The `AccountDialog` now allows users to tag accounts with a cash flow category (`Operating`, `Investing`, `Financing`) to ensure accurate reporting.
-*   **Database**: Schema updated to v1.0.7 to support the Cash Flow Statement (`cash_flow_category` column) and the new system accounts for Forex and WHT.
-*   All previously documented features (multi-company, bank reconciliation, dashboard, etc.) are stable and integrated with these new capabilities.
+As of version 17.0 (reflecting schema v1.0.7), the following key features are implemented:
+*   **Core Accounting**: Chart of Accounts (CRUD UI), General Journal (CRUD UI, Posting, Reversal), Fiscal Year/Period Management.
+*   **Tax Management**: GST F5 Return preparation with detailed Excel export, Withholding Tax application on payments.
+*   **Multi-Currency**: Full lifecycle support for foreign currency invoices and payments, with automatic calculation of realized gains/losses. A period-end procedure for calculating unrealized gains/losses is also implemented.
+*   **Business Operations**: Full CRUD and lifecycle management for Customers, Vendors, Products/Services, Sales & Purchase Invoicing, and Payments.
+*   **Banking**: Bank Account Management (CRUD), Manual Transaction Entry, CSV Bank Statement Import with column mapping, and a full-featured Bank Reconciliation module with draft persistence and visual matching.
+*   **Reporting**: Standard financial statements (Balance Sheet, P&L, Trial Balance, General Ledger), a new Statement of Cash Flows, and a preliminary Income Tax Computation report. All are exportable to PDF and Excel.
+*   **System Administration**: Multi-company management via a guided wizard, User and Role-Based Access Control (RBAC) management, and a comprehensive Audit Log viewer.
+*   **Dashboard**: Interactive dashboard displaying key financial indicators and ratios.
+*   **Database**: Schema is at v1.0.7, supporting all current features, including the `cash_flow_category` column for the Cash Flow Statement.
 
 ## 2. System Architecture
 
 ### 2.1 High-Level Architecture
-The application maintains its robust layered architecture, now enhanced to support more complex financial transactions.
+The application follows a layered architecture to promote separation of concerns, testability, and maintainability. This structure ensures that changes in one layer have a minimal and well-defined impact on others.
 
 ```mermaid
 graph TD
-    subgraph UI Layer
-        A[Presentation (app/ui)]
+    subgraph "Presentation Layer (app/ui)"
+        A[UI Widgets & Dialogs <br/> e.g., SalesInvoicesWidget]
+        B[Qt Models <br/> e.g., SalesInvoiceTableModel]
+    end
+
+    subgraph "Business Logic Layer"
+        C[Managers <br/> e.g., SalesInvoiceManager, ForexManager]
     end
     
-    subgraph Logic Layer
-        B[Business Logic (Managers)]
+    subgraph "Central Orchestrator"
+        D{ApplicationCore}
     end
 
-    subgraph Data Layer
-        C[Services / DAL (app/services)]
-        E[Database (PostgreSQL)]
+    subgraph "Data Access Layer (app/services)"
+        E[Services (Repositories) <br/> e.g., SalesInvoiceService, AccountService]
     end
 
-    subgraph Core
-        F[Application Core (app/core)]
-        D[Database Manager (app/core)]
-        G[Utilities & Common (app/utils, app/common)]
+    subgraph "Data Persistence Layer"
+        F[Database Manager <br/> (SQLAlchemy Core/ORM)]
+        G[(PostgreSQL Database <br/> with Schemas & Triggers)]
     end
 
-    A -->|User Actions & DTOs| B;
-    B -->|Service Calls| C;
-    C -->|SQLAlchemy & asyncpg| D;
-    D <--> E;
+    subgraph "Supporting Components"
+        H[Utilities <br/> (DTOs, Result Class, Helpers)]
+        I[AsyncIO Event Loop <br/> (Background Thread)]
+    end
 
-    B -->|Accesses shared services via| F;
-    A -->|Schedules tasks via| F;
-    C -->|Uses DB sessions from| F;
-    B -->|Uses| G;
-    A -->|Uses| G;
-    
-    style A fill:#cde4ff,stroke:#333,stroke-width:2px
-    style B fill:#d5e8d4,stroke:#333,stroke-width:2px
-    style C fill:#ffe6cc,stroke:#333,stroke-width:2px
-    style D fill:#f8cecc,stroke:#333,stroke-width:2px
-    style E fill:#dae8fc,stroke:#333,stroke-width:2px
-    style F fill:#e1d5e7,stroke:#333,stroke-width:2px
-    style G fill:#fff2cc,stroke:#333,stroke-width:2px
+    A -- "User Interaction, DTOs" --> C;
+    A -- "Displays Data From" --> B;
+    C -- "Updates UI Model With" --> B;
+    C -- "Calls Methods On" --> E;
+    D -- "Provides Access To Managers & Services" --> C;
+    A -- "Accesses Managers via" --> D;
+    E -- "Uses" --> F;
+    F -- "Manages Connections To" --> G;
+    C -- "Uses" --> H;
+    A -- "Schedules Async Task via Bridge" --> I;
+    I -- "Runs DB Operations via" --> F;
+    I -- "Returns Result To UI via Callback/Signal" --> A;
 ```
 
-### 2.2 Component Architecture (Updates for New Features)
+### 2.2 Component Architecture
 
 #### 2.2.1 Core Components (`app/core/`)
-*   No significant changes to the core components. They continue to provide the foundational services (DB connections, configuration, security) that the new features rely upon.
+-   **`Application` (`app/main.py`)**: The main entry point. It subclasses `QApplication` and is responsible for setting up the fundamental asynchronous architecture. It starts the `asyncio` event loop in a dedicated background thread and provides the `schedule_task_from_qt` bridge function for safe cross-thread communication. It manages the application's lifecycle, including the initialization sequence with a splash screen and a graceful shutdown procedure.
+-   **`ApplicationCore` (`app/core/application_core.py`)**: The central nervous system of the application, acting as a service locator and dependency injection container. It is instantiated once at startup and passed throughout the application. It initializes all service and manager classes, making them available as properties (e.g., `app_core.customer_manager`, `app_core.forex_manager`). This provides a single, consistent point of access to shared resources and business logic, greatly simplifying dependency management. A `minimal_init` flag allows it to be created without a database connection, enabling the UI to prompt for company selection on first run.
+-   **`CompanyManager` (`app/core/company_manager.py`)**: Manages the central registry of company databases, which is stored in a `companies.json` file in the user's config directory. It handles adding, removing, and listing available companies. It is initialized early and does not depend on a specific company database connection.
+-   **`DatabaseManager` (`app/core/database_manager.py`)**: Abstracts all direct interaction with PostgreSQL. It uses settings from `ConfigManager` to create a SQLAlchemy `async_engine` and an `async_sessionmaker`. Its primary feature is the `session()` async context manager, which provides a transactional `AsyncSession` to the service layer. It is also responsible for setting the `app.current_user_id` session variable used by database audit triggers.
+-   **`SecurityManager` (`app/core/security_manager.py`)**: Handles user authentication (password hashing with `bcrypt` and verification) and authorization (Role-Based Access Control). It tracks the `current_user` for the session and provides a `has_permission` method for RBAC checks throughout the UI.
+-   **`DBInitializer` (`app/core/db_initializer.py`)**: A crucial utility, callable from the UI, that programmatically creates a new company database, connects to it, and executes the `schema.sql` and `initial_data.sql` scripts to set it up from scratch.
 
-#### 2.2.2 Services (Data Access Layer - `app/services/`)
-*   **`AccountService`**: A new method, `get_accounts_by_tax_treatment`, was added to fetch accounts tagged for specific purposes (e.g., 'Non-Deductible'), which is used by the Income Tax Computation report.
-*   Other services remain largely unchanged, as the new logic is primarily orchestrated at the manager level.
+#### 2.2.2 Asynchronous Task Management (`app/main.py`)
+-   A dedicated Python `threading.Thread` (`_ASYNC_LOOP_THREAD`) runs a persistent `asyncio` event loop. This ensures that all database I/O and other long-running tasks do not block the main Qt GUI thread.
+-   The `schedule_task_from_qt(coroutine)` utility function is the vital bridge that allows the Qt thread to safely schedule a coroutine to run on the `asyncio` thread. It uses `asyncio.run_coroutine_threadsafe` and returns a `Future` object.
+-   UI updates resulting from these asynchronous operations are marshaled back to the Qt main thread using `QMetaObject.invokeMethod` or by connecting callbacks to the `Future` object's `done_callback`. This pattern is used extensively to maintain a responsive UI.
 
-#### 2.2.3 Managers (Business Logic Layer)
-*   **`PaymentManager` (`app/business_logic/payment_manager.py`)**: This manager has undergone the most significant refactoring. Its `create_payment` method is now a sophisticated transaction processor that correctly handles:
-    1.  Standard (base currency) payments.
-    2.  Foreign currency payments, calculating and posting realized forex gain/loss.
-    3.  Vendor payments with withholding tax deductions.
-    4.  A combination of foreign currency and withholding tax on the same payment.
-    The journal entry creation logic within this manager is now highly complex to ensure all these scenarios result in a balanced, compliant JE.
-*   **`FinancialStatementGenerator` (`app/reporting/financial_statement_generator.py`)**:
-    *   A new method, `generate_cash_flow_statement`, has been implemented. It uses the indirect method, starting with net income and making adjustments based on the new `cash_flow_category` tag on accounts.
-    *   The `generate_income_tax_computation` method has been fleshed out from a stub to a functional implementation.
-*   **`WithholdingTaxManager` (`app/tax/withholding_tax_manager.py`)**: The stub has been updated with a foundational implementation for `generate_s45_form_data`, demonstrating how data from a payment transaction can be mapped to a tax form structure.
+#### 2.2.3 Services (Data Access Layer - `app/services/`)
+Services implement the repository pattern, abstracting direct ORM query logic. This is the only layer (besides `DatabaseManager`) that directly interacts with SQLAlchemy.
+-   **`business_services.py`**: Contains services for all business-related entities, such as `CustomerService`, `SalesInvoiceService`, `PaymentService`, etc. The `get_all_summary` methods have been updated to accept a `status_list` for more flexible filtering. New methods like `get_all_open_invoices` have been added to support the `ForexManager`.
+-   **`accounting_services.py`, `account_service.py`, etc.**: Contain services for core accounting entities like `AccountService`, `JournalService`, `FiscalPeriodService`, `ExchangeRateService`.
+-   **`core_services.py`**: Contains services for system-level entities like `SequenceService` and `CompanySettingsService`. The `SequenceService` now encapsulates all interactions with the database sequence function.
 
-#### 2.2.4 User Interface (Presentation Layer - `app/ui/`)
-*   **`AccountDialog` (`app/ui/accounting/account_dialog.py`)**: A `QComboBox` for "Cash Flow Category" has been added, allowing users to tag accounts as Operating, Investing, or Financing.
-*   **`PaymentDialog` (`app/ui/payments/payment_dialog.py`)**:
-    *   A new "Withholding Tax" section with a checkbox (`self.apply_wht_check`) and display labels dynamically appears for applicable vendor payments.
-    *   The dialog's internal logic updates the display to show the calculated WHT amount and net payment when the feature is enabled.
-*   **`ReportsWidget` (`app/ui/reports/reports_widget.py`)**:
-    *   The "Report Type" dropdown now includes "Cash Flow Statement" and "Income Tax Computation".
-    *   The UI dynamically adjusts the available parameter fields based on the selected report.
-    *   New `QTreeView` displays have been added to the internal `QStackedWidget` to render these new hierarchical reports.
+#### 2.2.4 Managers (Business Logic Layer)
+Managers encapsulate business rules and orchestrate services.
+-   **`PaymentManager` (`app/business_logic/payment_manager.py`)**: Heavily refactored. Its `create_payment` method now contains complex logic to build a journal entry that correctly accounts for multi-currency settlements (realized gain/loss) and withholding tax liabilities, often in the same transaction.
+-   **`ForexManager` (`app/accounting/forex_manager.py`) (New)**: A new manager dedicated to period-end procedures. Its `create_unrealized_gain_loss_je` method orchestrates the revaluation of all open foreign currency AR, AP, and bank balances.
+-   **`FinancialStatementGenerator` & `GSTManager`**: Their `__init__` methods have been refactored to accept only `app_core`, from which they derive their service dependencies. This simplifies instantiation in `ApplicationCore`.
 
-## 3. Data Architecture
+#### 2.2.5 User Interface (Presentation Layer - `app/ui/`)
+-   **`MainWindow` (`app/ui/main_window.py`)**: Updated to use the new `CompanyCreationWizard`. Its `_handle_new_company_request` method now launches the wizard and processes the results from its registered fields to create the new company database.
+-   **`CompanyCreationWizard` (`app/ui/company/company_creation_wizard.py`) (New)**: Replaces the old single dialog. Provides a guided, multi-step process with an intro, a details page with validation, and a final confirmation page.
+-   **`AccountingWidget` (`app/ui/accounting/accounting_widget.py`)**: A new "Period-End Procedures" tab has been added, which hosts the UI for triggering the unrealized forex revaluation process.
 
-### 3.1. Database Schema (v1.0.7)
-*   The master schema is now at version **1.0.7**.
-*   **`accounting.accounts` table**: A new nullable column, `cash_flow_category VARCHAR(20)`, has been added. It has a `CHECK` constraint to only allow the values 'Operating', 'Investing', or 'Financing'. This is the key change enabling the automated Cash Flow Statement.
-*   **`core.configuration` table**: Three new keys have been added to `initial_data.sql` to support the new features: `SysAcc_WHTPayable`, `SysAcc_ForexGain`, and `SysAcc_ForexLoss`.
-*   **`accounting.accounts` initial data**: New default accounts have been added to `initial_data.sql`: `2130 - Withholding Tax Payable`, `7200 - Foreign Exchange Gain`, and `8200 - Foreign Exchange Loss`.
+### 2.3 Design Patterns
+-   **Layered Architecture**: As described above.
+-   **Model-View-Controller (MVC) / Model-View-Presenter (MVP)**: Guides the separation of UI (View), data (Model), and application logic (Controller/Presenter - Managers).
+-   **Repository Pattern**: Implemented by Service classes in the Data Access Layer.
+-   **Data Transfer Object (DTO)**: Pydantic models are used for structured data exchange between layers.
+-   **Result Object Pattern**: A custom `Result` class is used to return operation outcomes from the business logic layer.
+-   **Observer Pattern**: Qt's Signals and Slots mechanism is used for communication between UI components and handling asynchronous updates.
+-   **Dependency Injection (via Service Locator)**: `ApplicationCore` acts as a central service locator, providing dependencies to components that require them.
+-   **Facade Pattern**: The new `reverse_journal_entry` method in `JournalEntryManager` acts as a simple facade over the more descriptively named `create_reversing_entry` method, providing a stable public API.
 
-### 3.2. Data Models & DTOs
-*   **`Account` ORM Model (`app/models/accounting/account.py`)**: Updated to include the `cash_flow_category: Mapped[Optional[str]]` attribute.
-*   **`AccountCreateData` / `AccountUpdateData` DTOs**: Updated to include the optional `cash_flow_category` field.
-*   **`PaymentCreateData` DTO**: Updated with `apply_withholding_tax: bool` and `withholding_tax_amount: Optional[Decimal]` to carry WHT information from the UI to the `PaymentManager`.
+## 3. Data Architecture (Schema v1.0.7)
+
+### 3.1. Database Schema Overview
+The schema is defined in `scripts/schema.sql` (v1.0.7) and organized into `core`, `accounting`, `business`, and `audit` schemas.
+-   **`accounting.accounts` table**:
+    *   A new `cash_flow_category VARCHAR(20)` column has been added. It is nullable and has a `CHECK` constraint for 'Operating', 'Investing', or 'Financing'. This field is the foundation for the automated Statement of Cash Flows.
+-   **Triggers**:
+    *   `update_timestamp_trigger_func`: Automatically updates `updated_at` on row updates.
+    *   `log_data_change_trigger_func`: A powerful audit trigger that captures every `INSERT`, `UPDATE`, and `DELETE` on key tables, recording the user, the old/new data as JSONB, and a field-level breakdown of changes.
+    *   `update_bank_account_balance_trigger_func`: Automatically maintains the `current_balance` on `bank_accounts`.
+-   **Functions**:
+    *   `core.get_next_sequence_value`: A transaction-safe function for generating formatted sequential document numbers.
+
+### 3.2. Data Initialization (`initial_data.sql`)
+The initial data script has been updated to support the new features:
+-   **New System Accounts**: Inserts records into `accounting.accounts` for:
+    *   `2130 - Withholding Tax Payable`
+    *   `7200 - Foreign Exchange Gain` (Realized)
+    *   `8200 - Foreign Exchange Loss` (Realized)
+    *   `7201 - Unrealized Forex Gain (P&L)`
+    *   `8201 - Unrealized Forex Loss (P&L)`
+-   **New Configuration**: Inserts keys into `core.configuration` to link these system account codes to their functions (e.g., `SysAcc_WHTPayable`, `SysAcc_UnrealizedForexGain`).
+
+### 3.3. Data Models & DTOs
+-   **`Account` ORM Model (`app/models/accounting/account.py`)**: Updated to include the `cash_flow_category` attribute.
+-   **`AccountCreateData` / `AccountUpdateData` DTOs**: Updated to include the optional `cash_flow_category` field.
+-   **`PaymentCreateData` DTO**: Extended with `apply_withholding_tax: bool` and `withholding_tax_amount: Optional[Decimal]` to transport WHT information from the UI.
 
 ## 4. Detailed Feature Implementation
 
-### 4.1. Multi-Currency Workflow
-1.  **Invoice Posting**: A foreign currency (FC) invoice (e.g., for 1,000 USD) is created. At the invoice date exchange rate (e.g., 1.35), the system posts a JE debiting AR for 1,350 SGD and crediting Revenue for 1,350 SGD. The AR sub-ledger tracks both the 1,000 USD and the 1,350 SGD amounts.
-2.  **Payment Receipt**: The customer pays 1,000 USD. The payment is received on a later date when the exchange rate is 1.32. The actual cash received in the bank (after conversion) is 1,320 SGD.
-3.  **Forex Calculation (`PaymentManager`)**:
-    *   The manager sees a payment of 1,000 USD applied to an invoice of 1,000 USD.
-    *   It calculates the value of the payment in base currency: `1000 USD * 1.32 = 1320 SGD`.
-    *   It looks up the original invoice and sees it was booked to AR at 1,350 SGD.
-    *   It calculates the difference: `1350 SGD (original AR) - 1320 SGD (cash received) = 30 SGD`.
-    *   Since less base currency was received than expected for an asset, this is a **Realized Foreign Exchange Loss**.
-4.  **Journal Entry (`PaymentManager`)**: A single, balanced JE is created:
-    *   `Dr Bank Account: 1320 SGD`
-    *   `Dr Foreign Exchange Loss: 30 SGD`
-    *   `Cr Accounts Receivable: 1350 SGD`
-5.  This process correctly clears the AR in the base currency and recognizes the forex loss in the P&L. The logic is reversed for vendor payments.
+### 4.1. Unrealized Forex Gain/Loss Workflow
+1.  **User Action**: The user navigates to the "Period-End Procedures" tab in the Accounting module and clicks "Run Forex Revaluation...".
+2.  **UI Prompt**: A dialog appears, asking for the `revaluation_date`.
+3.  **Manager Orchestration (`ForexManager`)**:
+    *   Fetches all open foreign currency sales invoices, purchase invoices, and bank accounts.
+    *   For each item, it calculates the difference between its currently booked value in the base currency and its new value when revalued at the exchange rate for the `revaluation_date`.
+    *   These adjustments are aggregated by their respective GL control accounts (AR, AP, Bank GLs).
+4.  **Journal Entry Creation**:
+    *   If the net adjustment is material, a single journal entry is created.
+    *   It includes debit/credit lines for each affected control account to bring its balance to the revalued amount.
+    *   A final balancing line is created, debiting `Unrealized Forex Loss` or crediting `Unrealized Forex Gain`.
+5.  **Posting and Reversal**:
+    *   The main adjustment journal entry is created and posted as of the `revaluation_date`.
+    *   A second, perfect reversal of this entry is immediately created and posted for the following day (`revaluation_date + 1 day`). This ensures the unrealized adjustment does not permanently affect the books and is only reflected in the financial statements for the period ending on the revaluation date.
 
 ### 4.2. Withholding Tax Workflow
-1.  **Setup**: A vendor is marked as `withholding_tax_applicable` with a rate of 15% in `VendorDialog`. A `WHT Payable` liability account (`2130`) exists.
-2.  **Payment Creation (`PaymentDialog`)**: A user creates a payment for a $1,000 invoice from this vendor.
-    *   The `PaymentDialog` detects the vendor is WHT-applicable and displays the "Apply Withholding Tax" checkbox.
-    *   The user checks the box. The UI displays "WHT Rate: 15.00%" and "WHT Amount: 150.00".
-    *   The net amount paid to the vendor is implied to be $850.
-3.  **Manager Logic (`PaymentManager`)**: The `PaymentCreateData` DTO received by the manager includes `apply_withholding_tax=True`.
-    *   The manager calculates the WHT amount: `1000 * 15% = 150`.
-    *   It calculates the net cash paid: `1000 - 150 = 850`.
-    *   It creates the following balanced JE:
-        *   `Dr Accounts Payable: 1000.00` (Clears the full invoice liability)
-        *   `Cr Bank Account: 850.00` (Reflects actual cash outflow)
-        *   `Cr WHT Payable: 150.00` (Recognizes the liability to the tax authority)
-4.  **Reporting**: The `WHT Payable` account balance will appear on the Balance Sheet until it is cleared by a separate payment to IRAS. The `WithholdingTaxManager` can be used to generate supporting documentation.
+1.  **Setup**: A vendor is marked as `withholding_tax_applicable` with a rate (e.g., 15%).
+2.  **Payment Creation (`PaymentDialog`)**: A user creates a payment for a $1,000 invoice from this vendor. The UI shows an "Apply Withholding Tax" option. When checked, it displays the calculated WHT amount ($150) and the net payment ($850).
+3.  **Manager Logic (`PaymentManager`)**: The manager receives a DTO indicating WHT should be applied. It calculates the amounts and creates a single, balanced JE:
+    *   `Dr Accounts Payable: 1000.00` (Clears the full invoice liability)
+    *   `Cr Bank Account: 850.00` (Reflects actual cash outflow)
+    *   `Cr WHT Payable: 150.00` (Recognizes the liability to the tax authority)
 
 ### 4.3. Cash Flow Statement Generation
-1.  **User Setup (`AccountDialog`)**: The user (or an initial setup script) must tag relevant balance sheet accounts with a `cash_flow_category`. For example:
-    *   Accounts Receivable -> `Operating`
-    *   Inventory -> `Operating`
-    *   Property, Plant & Equipment -> `Investing`
-    *   Bank Loans -> `Financing`
-    *   Share Capital -> `Financing`
+1.  **User Setup (`AccountDialog`)**: The user tags balance sheet accounts with a `cash_flow_category` ('Operating', 'Investing', 'Financing').
 2.  **Report Generation (`FinancialStatementGenerator`)**:
     *   **Start with Net Income**: Fetches the net profit for the period from the P&L.
-    *   **Adjust for Non-Cash Items**: Identifies depreciation accounts (by `sub_type` convention) and adds back the depreciation expense for the period (calculated as the change in the accumulated depreciation account balance).
-    *   **Adjust for Working Capital**: For each account tagged as `Operating`, it calculates the change in its balance between the start and end dates.
-        *   An *increase* in an operating asset (like AR) is a *use* of cash, so it's **subtracted**.
-        *   An *increase* in an operating liability (like AP) is a *source* of cash, so it's **added**.
+    *   **Adjust for Non-Cash Items**: Adds back depreciation expense.
+    *   **Adjust for Working Capital**: For each account tagged as `Operating`, it calculates the change in its balance. An increase in an operating asset (like AR) is a *use* of cash (subtracted), while an increase in an operating liability (like AP) is a *source* of cash (added).
     *   **Calculate CFI & CFF**: It calculates the change in balance for all accounts tagged as `Investing` or `Financing` and lists these changes directly in their respective sections.
-    *   **Reconcile**: The net increase/decrease in cash is calculated. This is reconciled against the actual change in the cash and bank account balances over the period to ensure accuracy.
+    *   **Reconcile**: The net change in cash is calculated and reconciled against the actual change in the cash/bank account balances to ensure accuracy.
 
-## 5. Conclusion
-Version 17.0 represents a significant leap in functionality, moving SG Bookkeeper from a solid foundational tool to a more mature accounting application capable of handling complex, real-world business scenarios. The introduction of robust multi-currency accounting, integrated WHT management, and a compliant Cash Flow Statement drastically increases the application's value proposition for its target audience. The architectural enhancements, particularly the account tagging system and the complex logic encapsulated within the `PaymentManager`, have been implemented in a maintainable way that builds upon the existing layered design.
+## 5. Deployment and Installation
+-   **Prerequisites**: Python 3.9+, PostgreSQL 14+, Poetry.
+-   **Setup**:
+    1.  Clone repository.
+    2.  Install dependencies: `poetry install`.
+    3.  Configure database admin connection in a platform-specific `config.ini`.
+    4.  Initialize the application with `poetry run sg_bookkeeper`. On first run, use the "New Company" wizard to create the first company database. The `db_init.py` script will be called by the application to execute `schema.sql` (v1.0.7) and `initial_data.sql`.
+-   **Execution**: `poetry run sg_bookkeeper`.
+
+## 6. Conclusion
+Version 17.0 of SG Bookkeeper introduces significant enhancements to its accounting capabilities, moving it closer to a professional-grade financial management tool. The implementation of full multi-currency transaction handling, integrated WHT management, an automated Statement of Cash Flows, and an improved company creation wizard provides immense value. These features are built upon a stable, layered, and multi-company architecture, ensuring that complexity is managed effectively and the system remains robust and maintainable.
 
 ---
-https://drive.google.com/file/d/13a54HCe719DE9LvoTL2G3fufXVAZ68s9/view?usp=sharing, https://drive.google.com/file/d/16sEyvS8ZfOJFIHl3N-L34xQnhEo5XPcI/view?usp=sharing, https://drive.google.com/file/d/17Lx6TxeEQJauqxEwWQIjL_Vounz-OOuU/view?usp=sharing, https://drive.google.com/file/d/17M3-d4q02eUhkRMgogRQMxwSbiDkCJow/view?usp=sharing, https://drive.google.com/file/d/1MxP_SNNW86u44e2wupzz6i2gb0ibGeUE/view?usp=sharing, https://drive.google.com/file/d/1QsDwk2m_1Nh4JHOshQw4zjEI3x1mgGkM/view?usp=sharing, https://drive.google.com/file/d/1RkrdC_e7A_-nbzKVAiL_fX48uib6mu1T/view?usp=sharing, https://drive.google.com/file/d/1Wvi2CiVPY0EL2kErW2muu_LbMy4J_sRF/view?usp=sharing, https://drive.google.com/file/d/1XPEV3rOOikcWVvhB7GwX0raI__osRg-Z/view?usp=sharing, https://drive.google.com/file/d/1Z0gGlgu698IMIFg56GxD60l4xKNg1fIt/view?usp=sharing, https://drive.google.com/file/d/1cJjbc9s6IGkKHeAhk-dh7ey9i7ArJMJe/view?usp=sharing, https://drive.google.com/file/d/1jNlP9TOSJtMzQMeLH1RoqmU2Hx7iwQkJ/view?usp=sharing, https://drive.google.com/file/d/1q3W6Cs4WVx7dLwL1XGN9aQ6bb-hyHmWS/view?usp=sharing, https://drive.google.com/file/d/1qYszGazA6Zm1-3YGdaKdDlPEr3HipU5k/view?usp=sharing, https://drive.google.com/file/d/1uYEc0AZDEBE2A4qrR5O1OFcFVHJsCtds/view?usp=sharing, https://aistudio.google.com/app/prompts?state=%7B%22ids%22:%5B%221v7mZ4CEkZueuPt-aoH1XmYRmOooNELC3%22%5D,%22action%22:%22open%22,%22userId%22:%22103961307342447084491%22,%22resourceKeys%22:%7B%7D%7D&usp=sharing
+https://drive.google.com/file/d/11X3f2mKRWl56NubmyAKo5dwck7p2JaLs/view?usp=sharing, https://drive.google.com/file/d/127qgzFTDe-WAnzFzOzBn2efixfG9w9YE/view?usp=sharing, https://drive.google.com/file/d/131RjCRl_kHc0XtnhCzDmf5bjgJX5iEww/view?usp=sharing, https://drive.google.com/file/d/13B_HcJmxgi3QGYHnj64s275QZN20pg3g/view?usp=sharing, https://drive.google.com/file/d/19n5zeGWlBAwCRFAXfbe4kY5xBK-uV-d7/view?usp=sharing, https://drive.google.com/file/d/1M5ybbmzIqj7IUo99Yle7xl_pkczow6Ci/view?usp=sharing, https://drive.google.com/file/d/1P4rxLCG8-5cJ2_vt2qKJqO2wxN26ro9T/view?usp=sharing, https://aistudio.google.com/app/prompts?state=%7B%22ids%22:%5B%221Rh0wsFMlVjsOSccPUo5JJmfB6gof_tS2%22%5D,%22action%22:%22open%22,%22userId%22:%22103961307342447084491%22,%22resourceKeys%22:%7B%7D%7D&usp=sharing, https://drive.google.com/file/d/1T1kVeTCKFOIzPckOmAarcwHC8x0yau1i/view?usp=sharing, https://drive.google.com/file/d/1dAgihzWoQ03fPAECRX4qUzJiiJppPgwz/view?usp=sharing, https://drive.google.com/file/d/1gM89F4jZMNsWNTd9bxJxPfRxY0Y2Vfof/view?usp=sharing, https://drive.google.com/file/d/1hAf_3y-ecY6gAU67N0KzgqGZz1XrDjed/view?usp=sharing, https://drive.google.com/file/d/1iLEa4z_1QZHLh5VEurZg7rUHZneQzsY8/view?usp=sharing, https://drive.google.com/file/d/1mO8_5fwtxIboAdjNo31vNNnNYbzI8-gq/view?usp=sharing, https://drive.google.com/file/d/1tbuyHau6G4TdCZ0v6u22_ePISFTSNU7r/view?usp=sharing, https://drive.google.com/file/d/1uC_hd3fJooXn4tQQsLJPU3mxW07hDGym/view?usp=sharing
 

@@ -8,7 +8,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![PySide6 6.7+](https://img.shields.io/badge/UI-PySide6_6.7-green.svg)](https://doc.qt.io/qtforpython/)
+[![PySide6 6.9+](https://img.shields.io/badge/UI-PySide6_6.9-green.svg)](https://doc.qt.io/qtforpython/)
 [![PostgreSQL 14+](https://img.shields.io/badge/DB-PostgreSQL_14+-blue.svg)](https://www.postgresql.org/)
 [![SQLAlchemy 2.0+](https://img.shields.io/badge/ORM-SQLAlchemy_2.0-orange.svg)](https://www.sqlalchemy.org/)
 [![Asyncpg](https://img.shields.io/badge/Async-Asyncpg-purple.svg)](https://github.com/MagicStack/asyncpg)
@@ -60,7 +60,7 @@ Compliance with Singapore's regulatory landscape is a primary design goal. The a
 ### Singapore Tax Compliance
 -   **GST Tracking and Calculation**: The system uses configurable tax codes (e.g., SR for Standard Rate, ZR for Zero Rate, ES for Exempt, TX for Taxable Purchases) to track GST on transactions. The `TaxCalculator` service provides centralized logic for applying the correct tax rate (including the 9% GST rate) to line items.
 -   **GST F5 Return Data Preparation**: The Reports module includes a feature to generate the data required for the IRAS GST F5 return for any given period. It calculates values for each box (e.g., Box 1: Standard-Rated Supplies, Box 5: Taxable Purchases) and allows for the finalization of the return, which automatically posts a settlement journal entry to clear the GST input and output tax accounts to a central GST control account. A detailed Excel export provides a full breakdown of the transactions contributing to each box.
--   **Withholding Tax (WHT) Management**: Vendors can be flagged as subject to withholding tax. When creating a payment for such a vendor, the `PaymentDialog` provides an option to apply WHT. If selected, the system automatically calculates the WHT amount and creates a journal entry that correctly clears the full Accounts Payable liability while crediting both the bank account (for the net payment) and a `WHT Payable` liability account. A dedicated reporting tab allows for the generation of WHT certificates.
+-   **Withholding Tax (WHT) Management**: Vendors can be flagged as subject to withholding tax. When creating a payment for such a vendor, the `PaymentDialog` provides an option to apply WHT. If selected, the system automatically calculates the WHT amount and creates a journal entry that correctly clears the full Accounts Payable liability while crediting both the bank account (for the net payment) and a `WHT Payable` liability account.
 -   **Income Tax Computation Report**: A preliminary tax computation report can be generated from the Reports module. It starts with the Profit & Loss statement's net profit and allows for adjustments based on accounts tagged with tax treatments like "Non-Deductible," providing an estimated chargeable income.
 
 ### Business Operations
@@ -96,7 +96,7 @@ Compliance with Singapore's regulatory landscape is a primary design goal. The a
 
 ## Technology Stack
 -   **Programming Language**: Python 3.9+ (up to 3.12). Chosen for its extensive ecosystem, readability, and strong support for asynchronous programming.
--   **UI Framework**: PySide6 6.7.0+. The official Qt for Python bindings, providing access to the mature and powerful Qt framework for creating modern, cross-platform desktop applications.
+-   **UI Framework**: PySide6 6.9.0+. The official Qt for Python bindings, providing access to the mature and powerful Qt framework for creating modern, cross-platform desktop applications.
 -   **Database**: PostgreSQL 14+. Selected for its robustness, ACID compliance, and advanced features like triggers, custom functions, and JSONB support, which are heavily utilized for data integrity and auditing.
 -   **ORM**: SQLAlchemy 2.0+. The de-facto standard for Python ORMs, providing a powerful and flexible way to interact with the database. The application leverages its modern asynchronous (asyncio) capabilities.
 -   **Async DB Driver**: `asyncpg`. A high-performance, asyncio-native driver for PostgreSQL.
@@ -157,6 +157,9 @@ The project uses a layered architecture, with the source code organized as follo
 -   `scripts/`: Database setup scripts (`schema.sql`, `initial_data.sql`, `db_init.py`).
 -   `tests/`: All automated tests.
 
+## Database Schema
+The PostgreSQL database schema is at version **1.0.7**. It includes tables for core system functions, detailed accounting, business operations, and comprehensive audit trails. Key features include the `cash_flow_category` column in `accounting.accounts` for the Cash Flow Statement, and powerful triggers for auditing and automatic balance updates. Refer to `scripts/schema.sql` for full details.
+
 ## Testing
 The project emphasizes quality through automated testing using the Pytest framework.
 -   **Strategy**: The focus is on comprehensive unit tests with strong isolation, achieved through extensive mocking of dependencies. This ensures that the logic of each component is verified independently. Integration and UI tests are planned for future development cycles.
@@ -171,16 +174,16 @@ Contributions are welcome! Please fork the repository, create a feature branch, 
 ## Roadmap
 
 ### Recently Completed
--   **Architectural Refactoring**: A major refactoring of the dependency injection model, using lazy-loading properties in `ApplicationCore` to decouple components and improve maintainability.
 -   **New Company Wizard**: Replaced the simple dialog with a multi-step `QWizard` for a better user experience.
 -   **Multi-Currency Accounting**: Implemented calculation and posting of realized forex gains/losses on payments.
+-   **Withholding Tax (WHT) Management**: Implemented WHT application on vendor payments with correct JE creation.
 -   **Unrealized Forex Revaluation**: Implemented the period-end procedure to revalue open foreign currency balances.
--   **Withholding Tax (WHT) Management**: Implemented WHT application on vendor payments with correct JE creation and certificate data generation.
 -   **Statement of Cash Flows**: Added a new report that generates a full Statement of Cash Flows using the indirect method.
 
-### Next Steps
--   **WHT Reporting**: Create UI and reports for managing and filing withheld taxes (e.g., generating Form S45 PDFs).
--   **Expand Test Coverage**: Add comprehensive unit tests for the newly added and refactored Manager classes (`ForexManager`, `PaymentManager`, etc.).
+### Current Focus / Next Steps
+-   **WHT Reporting**: Create UI and reports for managing and filing withheld taxes (e.g., generating Form S45).
+-   **Advanced Reporting**: Enhance the reporting engine with more customization options and financial analytics.
+-   **Automated Testing**: Significantly expand unit test coverage for the new manager classes (`ForexManager`, `PaymentManager`) and begin implementing integration tests for key end-to-end workflows.
 -   **User Experience Refinements**: Polish existing UIs based on usability feedback, particularly in the invoicing and payment modules.
 
 ### Long-term

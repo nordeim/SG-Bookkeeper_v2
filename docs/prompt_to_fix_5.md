@@ -18,3 +18,10 @@ Please review the start-up log below. If it is part of your update for the refac
 
 Create the above code review report as markdown document named `code_review_report_on_changes_of_refactoring.md` 
 
+---
+awesome job again! please keep up the good work!
+
+Attached are files from the current codebase that have been recently added or modified. Please use line by line comparison to carefully and deeply study and analyze each file enclosed, paying especially close attention to the database script files. You should have a deep understanding of the current codebase, especially about the recent updates triggered by "architecture refactoring" (refer to the attached report). First have a deep understanding of the current codebase, then compare your understanding to the project related documents shared. Then give me a detailed report on your review and analysis in markdown format.
+
+Make sure you also analyze the recent change related to the addition of multi-company and multi-currency supports.
+
