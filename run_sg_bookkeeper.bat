@@ -7,11 +7,11 @@ REM Activate the virtual environment (Windows CMD syntax)
 call .venv\Scripts\activate.bat
 
 REM Set database connection parameters
-set PGUSER=your_db_user
-set PGPASSWORD=your_db_password
+set PGUSER=sgbookkeeper_user
+set PGPASSWORD=SGkeeperPass123
 set PGHOST=localhost
 set PGPORT=5432
-set PGDATABASE=your_db_name
+set PGDATABASE=sg_bookkeeper
 
 REM Launch the SG Bookkeeper application
 poetry run sg_bookkeeper
