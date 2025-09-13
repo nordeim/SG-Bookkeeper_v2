@@ -21,4 +21,6 @@ echo PGPORT=%PGPORT%
 echo PGDATABASE=%PGDATABASE%
 
 REM Launch the SG Bookkeeper application
+REM PGPASSWORD=PGAdmin1234 /F/Program\ Files/PostgreSQL/17/bin/psql -h localhost -U postgres
+REM ALTER USER sgbookkeeper_user WITH PASSWORD 'SGkeeperPass123';
 poetry run sg_bookkeeper
